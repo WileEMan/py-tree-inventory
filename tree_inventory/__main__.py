@@ -1,16 +1,14 @@
-import os
 import sys
 import argparse
-import hashlib
 import json
 import logging
-from time import perf_counter
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
 from typing import Union
 
-from .helpers import calculate_md5, enumerate_dir, find_checksum_file, read_checksum_file, extract_record
+from .calculate import Calculator
+from .helpers import find_checksum_file, read_checksum_file, extract_record
 
 logger = logging.getLogger(__name__)
 
@@ -45,79 +43,17 @@ def calculate_tree(root: Path, continue_previous: bool = False, detail_files: bo
             with open(csum_file, "wt") as outfile:
                 json.dump(root_record, outfile)
 
-        last_occasion = perf_counter()
-        between_occasions = 60.0
-
         def on_occasion():
-            nonlocal progress, total_files, files_done, between_occasions
-            start_occasion = perf_counter()
+            nonlocal progress, total_files, files_done
+
             progress.total = total_files
             progress.n = files_done
             progress.refresh()
 
             save_record()
-            finish_occasion = perf_counter()
-            occasion_length = finish_occasion - start_occasion
-            if occasion_length < 2.0:
-                between_occasions = 60.0
-            else:
-                between_occasions = occasion_length * 25
 
-        def calculate_branch(record: dict, dir: Path, level: int):
-            nonlocal progress, total_files, files_done, last_occasion, between_occasions
-            checksum = hashlib.md5()
-            files, subdirectories = enumerate_dir(dir)
-            total_files += len(files) + len(subdirectories)
-
-            if len(subdirectories) > 0:
-                if not continue_previous or "subdirectories" not in record:
-                    record["subdirectories"] = {}
-                for name in subdirectories:
-                    checksum.update(name.encode("utf-8"))
-                    sub_record = (
-                        {}
-                        if (not (continue_previous) or name not in record["subdirectories"])
-                        else record["subdirectories"][name]
-                    )
-                    record["subdirectories"][name] = sub_record
-                    if "MD5" not in sub_record:
-                        calculate_branch(sub_record, dir / name, level + 1)
-                    checksum.update(sub_record["MD5"].encode("utf-8"))
-                    files_done += 1
-                    if perf_counter() - last_occasion > between_occasions:
-                        last_occasion = perf_counter()
-                        on_occasion()
-
-            fileMD5 = hashlib.md5()
-            n_files = 0
-            if detail_files:
-                file_listing = record["file-listing"] = {}
-            for name in files:
-                if level == 0 and name == "tree_checksum.json":
-                    # Skip the file that we created ourselves, but only at the top-level.
-                    files_done += 1
-                    continue
-                n_files += 1
-                this_md5 = calculate_md5(dir, name)
-                fileMD5.update(this_md5.hexdigest().encode("utf-8"))
-                if detail_files:
-                    file_listing[name] = {
-                        "MD5": this_md5.hexdigest(),
-                        "size": os.path.getsize(dir / name),
-                        "last-modified-at": os.path.getmtime(dir / name),
-                    }
-                files_done += 1
-                if perf_counter() - last_occasion > between_occasions:
-                    last_occasion = perf_counter()
-                    on_occasion()
-            checksum.update(fileMD5.hexdigest().encode("utf-8"))
-            record["n_files"] = n_files
-            record["MD5-files_only"] = fileMD5.hexdigest()
-
-            record["MD5"] = checksum.hexdigest()
-            return
-
-        calculate_branch(root_record, root, 0)
+        calc = Calculator(on_occasion, continue_previous, detail_files)
+        calc.calculate_branch(root_record, root, 0)
     save_record()
     logger.info(f"Done.")
 
