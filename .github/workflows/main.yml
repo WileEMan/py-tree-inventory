@@ -1,0 +1,139 @@
+name: Main
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+
+jobs:
+  static_analysis:
+    name: Linting and Type Checking
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.10" ]
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.5.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --only dev
+
+      - name: Black
+        uses: psf/black@stable
+        with:
+          options: "--line-length 120 --check --verbose"
+          version: "~= 23.0"
+
+      - name: flake8
+        run: poetry run flake8 emulation tests --count --max-line-length=120 --extend-ignore=E203,E266,E501,W503,F403,E722,F541 --statistics
+
+      - name: MyPy
+        run: poetry run mypy tree_inventory/__main__.py
+
+  unit_tests_linux:
+    name: Ubuntu, Build & Unit Testing
+    runs-on: ubuntu-22.04
+    # Disable this job for now, until the tests are more in-place.
+    if: false
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.10" ]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: '0'
+
+      - name: print ENV variables
+        run: printenv
+
+      - name: Set up Python ${{ matrix.python-version }}
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.5.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install OS packages
+        run: |
+          sudo apt-get update && \
+          sudo apt-get install -y \
+
+      - name: Install project and dependencies
+        run: poetry install --no-interaction
+
+      - name: Install additional test dependencies
+        run: poetry install --no-interaction --only test
+
+      - name: Test with pytest
+        run: poetry run pytest tests/ -vv
+
+
+  unit_tests_windows:
+    name: Windows, Build & Unit Testing
+    runs-on: windows-2019
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.9" ]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: '0'
+
+      - name: Set up Python ${{ matrix.python-version }}
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Print python version
+        run: python3 --version
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.5.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install project and dependencies
+        run: poetry install --no-interaction
+
+      - name: Test with pytest
+        run: poetry run pytest tests/ -vv

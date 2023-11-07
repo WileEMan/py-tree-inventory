@@ -7,50 +7,21 @@ import logging
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
-from typing import Tuple, Union
+from typing import Union
+
+from .helpers import calculate_md5, enumerate_dir, find_checksum_file, read_checksum_file, extract_record
 
 logger = logging.getLogger(__name__)
 
-
 PathOrStr = Union[Path, str]
 
-def calculate_md5(dirname: PathOrStr, fname: PathOrStr) -> hashlib.md5:
-    hash_md5 = hashlib.md5()
-    hash_md5.update(str(fname).encode("utf-8"))
-    with open(Path(dirname) / fname, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    # print(f"MD5 of file '{fname}': {hash_md5.hexdigest()}")
-    return hash_md5
 
+def calculate_tree(root: Path, detail_files: bool = False):
+    """calculate_tree() implements the main record calculation facility
+    of tree_inventory and is invoked via the --calculate command-line
+    option.
+    """
 
-def record_summary(record: dict):
-    ret = "{"
-    for key in record:
-        if key == "subdirectories":
-            subdirectories = record[key]
-            ret += f"\n\t{key}: subdirectories: "
-            if len(subdirectories) < 10:
-                ret += ', '.join([name for name in subdirectories])
-            else:
-                ret += f"{str(len(record[key]))} subdirectories (not shown)"
-        else:
-            ret += f"\n\t{key}: {str(record[key])}"
-    ret += "\n}"
-    return ret
-
-
-def enumerate_dir(dir: Path) -> Tuple[list, list]:
-    subdirectories = []
-    files = []
-    for name in os.listdir(dir):
-        if os.path.isdir(dir / name):
-            subdirectories.append(name)
-        else:
-            files.append(name)
-    return files, subdirectories
-
-def do_calculate_tree(root: Path):
     logger.info(f"Calculating checksum for path '{root}'...")
     with tqdm(total=1) as progress:
         total_files = 0
@@ -65,39 +36,53 @@ def do_calculate_tree(root: Path):
 
             for name in subdirectories:
                 checksum.update(name.encode("utf-8"))
-                subcollection = {}
-                subdir_checksum, subdir_n_files, fileMD5 = calculate_branch(dir / name, subcollection, level + 1)
+                subcollection: dict = {}
+                subdir_checksum, subdir_n_files, fileMD5, file_listing = calculate_branch(
+                    dir / name, subcollection, level + 1
+                )
                 collection[name] = {
                     "n_files": n_files,
                     "subdirectories": subcollection,
                     "MD5": subdir_checksum.hexdigest(),
-                    "files_only_MD5": fileMD5.hexdigest()
+                    "MD5-files_only": fileMD5.hexdigest(),
                 }
+                if detail_files:
+                    collection[name]["file-listing"] = file_listing
                 n_files += subdir_n_files
-                checksum.update(subdir_checksum.hexdigest().encode('utf-8'))
+                checksum.update(subdir_checksum.hexdigest().encode("utf-8"))
 
                 progress.total = total_files
                 progress.n = files_done
                 progress.refresh()
 
             fileMD5 = hashlib.md5()
+            file_listing = {}
             for name in files:
-                fileMD5.update(calculate_md5(dir, name).hexdigest().encode("utf-8"))
+                this_md5 = calculate_md5(dir, name)
+                fileMD5.update(this_md5.hexdigest().encode("utf-8"))
+                if detail_files:
+                    file_listing[name] = {
+                        "MD5": this_md5.hexdigest(),
+                        "size": os.path.getsize(dir / name),
+                        "last-modified-at": os.path.getmtime(dir / name),
+                    }
                 files_done += 1
             checksum.update(fileMD5.hexdigest().encode("utf-8"))
 
-            return checksum, n_files, fileMD5
+            return checksum, n_files, fileMD5, file_listing
 
-        root_subdirectories = {}
-        checksum, n_files, fileMD5 = calculate_branch(root, root_subdirectories, 0)
+        root_subdirectories: dict = {}
+        checksum, n_files, fileMD5, file_listing = calculate_branch(root, root_subdirectories, 0)
 
     root_data = {
         "n_files": n_files,
         "subdirectories": root_subdirectories,
         "calculated_at": datetime.now().isoformat(),
-        "files_only_MD5": fileMD5.hexdigest(),
-        "MD5": checksum.hexdigest()
+        "MD5-files_only": fileMD5.hexdigest(),
+        "MD5": checksum.hexdigest(),
     }
+    if detail_files:
+        root_data["file-listing"] = file_listing
 
     logger.info(f"A total of {n_files} files were enumerated.")
     logger.info(f"Checksum computed: {checksum.hexdigest()}")
@@ -108,54 +93,18 @@ def do_calculate_tree(root: Path):
     logger.info(f"Checksum saved.")
 
 
-def find_checksum_file(starting: Path):
-    attempt = starting / "tree_checksum.json"
-    if attempt.exists():
-        return attempt
-    if starting.resolve() == starting.parent.resolve():
-        # 'starting' is already the root...
-        return None
-    return find_checksum_file(starting.parent)
-
-
-def read_checksum_file(checksum_file: Path):
-    with open(checksum_file, "rt") as fh:
-        return json.load(fh)
-
-
-def extract_record(root_record: dict, checksum_file: Path, target_path: Path):
-    def descend_toward(target: tuple, base_record: dict):
-        try:
-            print(f"Descending toward: {target}")
-            first_dir = target[0]
-            if first_dir not in base_record["subdirectories"]:
-                raise RuntimeError(
-                    f"While searching for the subdirectory entry for: {target_path}"
-                    + f"\nIn checksum record file: {checksum_file}"
-                    + f"\nThe subdirectory: {first_dir}"
-                    + f"\nWas not found in the record.  The checksum record might be out-of-date."
-                )
-            next_record = base_record["subdirectories"][first_dir]
-            if len(target) == 1:
-                return next_record
-            return descend_toward(target[1:], next_record)
-        except Exception as ex:
-            raise RuntimeError(str(ex)
-                               + f"\nWhile descending records toward: {target}"
-                               + f"\nFrom base record: \n{record_summary(base_record)}") from ex
-
-    logger.debug(f"target_path = {target_path}")
-    logger.debug(f"checksum_file = {checksum_file}")
-    logger.debug(f"checksum_file.parent = {checksum_file.parent}")
-    rel_path = target_path.relative_to(checksum_file.parent)
-    if str(rel_path) == ".":
-        return rel_path, root_record
-    logger.debug(f"rel_path = {rel_path}")
-    logger.debug(f"Searching for record for target: {rel_path}")
-    return rel_path, descend_toward(rel_path.parts, root_record)
-
-
 def compare_trees(A: Path, B: Path):
+    """compare_trees() implements the main record comparison facility
+    of tree_inventory and is invoked via the --compare command-line
+    option.  It relies entirely on the records for comparison, so
+    calculate must be called before comparing and the comparison will
+    only be as up-to-date as the records.  The output should display
+    a "as-of" timestamp.  Only differences should be highlighted, and
+    with only enough detail to home in on the areas of interest.  The
+    compare_trees() function is basically a "diff" operation, but based
+    on the checksum record files.
+    """
+
     logger.info(f"Comparing trees:\n\tA: {A}\n\tB: {B}")
     A_record_file = find_checksum_file(A)
     B_record_file = find_checksum_file(B)
@@ -174,6 +123,13 @@ def compare_trees(A: Path, B: Path):
         )
 
     def compare_branch(A_base_path: tuple, B_base_path: tuple, A_record: dict, B_record: dict, level: int):
+        """compare_branch() is the recursive workhorse of compare_trees() that operates on a particular
+        folder within the trees.  The 'level' argument in some parts of this code increments with each
+        level deeper into the tree, but here is only starts incrementing once a directory with
+        differences is found.  That way, we can keep track of how many folders we've displayed information
+        for and only show a couple of levels of differences.
+        """
+
         if A_record["MD5"] == B_record["MD5"] and A_record["n_files"] == B_record["n_files"]:
             return ""
         if level >= 3:
@@ -181,8 +137,8 @@ def compare_trees(A: Path, B: Path):
 
         is_diff = False
         msg = ""
-        if A_record["files_only_MD5"] != B_record["files_only_MD5"]:
-            msg += ('\t' * (level+1)) + f"Files within this folder mismatch.\n"
+        if A_record["MD5-files_only"] != B_record["MD5-files_only"]:
+            msg += ("\t" * (level + 1)) + f"Files within this folder mismatch.\n"
             is_diff = True
 
         # Check if any subdirectories are absent first
@@ -190,12 +146,12 @@ def compare_trees(A: Path, B: Path):
         for name in A_record["subdirectories"]:
             a_record = A_record["subdirectories"][name]
             if name not in B_record["subdirectories"]:
-                msg += ('\t' * (level+1)) + f"Directory '{name}' absent from B.\n"
+                msg += ("\t" * (level + 1)) + f"Directory '{name}' absent from B.\n"
                 is_diff = True
         for name in B_record["subdirectories"]:
             b_record = B_record["subdirectories"][name]
             if name not in A_record["subdirectories"]:
-                msg += ('\t' * (level+1)) + f"Directory '{name}' absent from A.\n"
+                msg += ("\t" * (level + 1)) + f"Directory '{name}' absent from A.\n"
                 is_diff = True
 
         # Once we find the levels where there are differences, we always want to
@@ -210,22 +166,21 @@ def compare_trees(A: Path, B: Path):
                 msg += compare_branch(A_base_path / name, B_base_path / name, a_record, b_record, level)
 
         if len(msg) > 0:
-            msg = ('\t' * (level-1)) + f"{A_base_path} (A) vs {B_base_path} (B):\n" + msg
+            msg = ("\t" * (level - 1)) + f"{A_base_path} (A) vs {B_base_path} (B):\n" + msg
 
         return msg
-
 
     A_base_path = A_record_file.parent / A_rel_path
     B_base_path = B_record_file.parent / B_rel_path
     result = compare_branch(A_base_path, B_base_path, A_subrecord, B_subrecord, 0)
-    if not(result):
+    if not (result):
         result = "\tNo differences found.\n"
     result = f"\n\nAs of {A_record['calculated_at']} (A) and {B_record['calculated_at']} (B):\n" + result
     logger.info(result)
 
 
-def do_copy_tree(source: Path, destination: Path):
-    raise NotImplementedError()
+def copy_tree_as_needed(source: Path, destination: Path):
+    raise NotImplementedError("This functionality is not yet implemented, sorry.")
 
 
 def main(args):
@@ -234,16 +189,32 @@ def main(args):
         if isinstance(handler, logging.StreamHandler):
             handler.setLevel(logging.INFO)
 
-    parser = argparse.ArgumentParser(description="Tool for collecting MD5 hashes of directory trees and selective copying")
-    parser.add_argument("--calculate", type=str, default=None, help="Calculate the MD5 hash of the specified path and tree")
-    parser.add_argument("--compare", type=str, nargs=2, default=None,
-                        metavar=("A", "B"),
-                        help="Compare checksum records for two paths and identify differences.")
-    parser.add_argument("--copy", type=str, nargs=2, default=None,
-                        metavar=("source", "destination"),
-                        help="Copy the tree from [source] to [destination] where MD5s do not match.")
-    parser.add_argument("--v", action="store_true",
-                        help="Increase verbosity.")
+    parser = argparse.ArgumentParser(
+        description="Tool for collecting MD5 hashes of directory trees and selective copying"
+    )
+    parser.add_argument(
+        "--calculate", type=str, default=None, help="Calculate the MD5 hash of the specified path and tree"
+    )
+    parser.add_argument(
+        "--compare",
+        type=str,
+        nargs=2,
+        default=None,
+        metavar=("A", "B"),
+        help="Compare checksum records for two paths and identify differences.",
+    )
+    parser.add_argument(
+        "--copy",
+        type=str,
+        nargs=2,
+        default=None,
+        metavar=("source", "destination"),
+        help="Copy the tree from [source] to [destination] where MD5s do not match.",
+    )
+    parser.add_argument(
+        "--detail-files", action="store_true", help="Capture detailed file listings in the record file."
+    )
+    parser.add_argument("--v", action="store_true", help="Increase verbosity.")
     args = parser.parse_args(args)
 
     if args.v:
@@ -254,15 +225,16 @@ def main(args):
         logger.debug(f"Debug-level verbosity enabled.")
 
     if args.calculate is not None:
-        do_calculate_tree(Path(args.calculate))
+        calculate_tree(Path(args.calculate), args.detail_files)
     elif args.copy is not None:
         source, destination = args.copy
-        do_copy_tree(Path(source), Path(destination))
+        copy_tree_as_needed(Path(source), Path(destination))
     elif args.compare is not None:
         source, destination = args.compare
         compare_trees(Path(source), Path(destination))
     else:
         logger.error("No command was recognized on the command-line.")
 
+
 if __name__ == "__main__":
-    main(sys.args)
+    main(sys.argv)
