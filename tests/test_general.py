@@ -85,7 +85,17 @@ def parse_results(text: str, base_A: Path, base_B: Path):
             current_A = Path(line[0:iA].strip()).relative_to(base_A)
             current_B = Path(line[iVS + 2 : iB].strip()).relative_to(base_B)
         if "Files within this folder mismatch" in line:
-            file_mismatches.append((current_A, current_B))
+            file_mismatches.append(str(current_A))
+        if "absent from A" in line:
+            i_apos1 = line.index('\'')
+            i_apos2 = line.rindex('\'')
+            absent = line[i_apos1+1:i_apos2]
+            missing_A.append(absent)
+        if "absent from B" in line:
+            i_apos1 = line.index('\'')
+            i_apos2 = line.rindex('\'')
+            absent = line[i_apos1+1:i_apos2]
+            missing_B.append(absent)
 
     return file_mismatches, missing_A, missing_B
 
@@ -128,12 +138,40 @@ def test_example():
         print_file(temp_path / "tree_checksum.json")
         test = main_with_log(["--compare", str(resources_path), str(temp_path)] + addn_options)
         file_mismatches, missing_A, missing_B = parse_results(test, resources_path, temp_path)
-        print(f"File mismatches:\n{file_mismatches}")
-        # assert "No differences" in test
-        # main_with_log(["--compare",
-        # str(resources_path / "Folder_C" / "Folder_C2"),
-        # str(temp_path / "Folder_C" / "Folder_C2")] + addn_options)
-        # assert "No differences" in test
+        assert file_mismatches == ["Folder_C"]
+        assert len(missing_A) == 0
+        assert len(missing_B) == 0
+
+        test = main_with_log(["--compare",
+            str(resources_path / "Folder_C" / "Folder_C2"),
+            str(temp_path / "Folder_C" / "Folder_C2")] + addn_options)
+        assert "No differences" in test
+
+        ###
+        ### Add directory in Folder_C / Folder_C2
+        ### (the added file is still present too)
+        ###
+
+        (temp_path / "Folder_C" / "Folder_C2" / "New_Directory").mkdir()
+        main_with_log(["--calculate", str(temp_path)] + addn_options)
+        test = main_with_log(["--compare", str(resources_path), str(temp_path)] + addn_options)
+        file_mismatches, missing_A, missing_B = parse_results(test, resources_path, temp_path)
+        assert file_mismatches == ["Folder_C"]
+        assert missing_A == ["New_Directory"]
+        assert len(missing_B) == 0
+
+        ###
+        ### Start comparison from within Folder_C2
+        ### And also swap A and B
+        ###
+
+        test = main_with_log(["--compare",
+                              str(temp_path / "Folder_C" / "Folder_C2"),
+                              str(resources_path / "Folder_C" / "Folder_C2")] + addn_options)
+        file_mismatches, missing_A, missing_B = parse_results(test, temp_path, resources_path)
+        assert len(file_mismatches) == 0
+        assert len(missing_A) == 0
+        assert missing_B == ["New_Directory"]
 
     finally:
         shutil.rmtree(temp_path)

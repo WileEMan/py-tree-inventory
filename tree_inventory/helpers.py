@@ -89,7 +89,7 @@ def extract_record(root_record: dict, checksum_file: Path, target_path: Path):
 
     def descend_toward(target: tuple, base_record: dict):
         try:
-            print(f"Descending toward: {target}")
+            # print(f"Descending toward: {target}")
             first_dir = target[0]
             if first_dir not in base_record["subdirectories"]:
                 raise RuntimeError(

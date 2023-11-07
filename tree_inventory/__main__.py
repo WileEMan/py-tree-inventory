@@ -58,6 +58,9 @@ def calculate_tree(root: Path, detail_files: bool = False):
             fileMD5 = hashlib.md5()
             file_listing = {}
             for name in files:
+                if level == 0 and name == "tree_checksum.json":
+                    # Skip the file that we created ourselves, but only at the top-level.
+                    continue
                 this_md5 = calculate_md5(dir, name)
                 fileMD5.update(this_md5.hexdigest().encode("utf-8"))
                 if detail_files:
@@ -128,6 +131,9 @@ def compare_trees(A: Path, B: Path):
         level deeper into the tree, but here is only starts incrementing once a directory with
         differences is found.  That way, we can keep track of how many folders we've displayed information
         for and only show a couple of levels of differences.
+
+        Note: if changing the aesthetics here (the text written to msg), also check that test_general.py's
+        parse_results() function is updated to be able to parse the new output.
         """
 
         if A_record["MD5"] == B_record["MD5"] and A_record["n_files"] == B_record["n_files"]:
@@ -159,7 +165,7 @@ def compare_trees(A: Path, B: Path):
         if level > 0 or is_diff:
             level += 1
 
-        for name in set(A_record["subdirectories"].keys()).union(B_record["subdirectories"].keys()):
+        for name in set(A_record["subdirectories"].keys()).intersection(B_record["subdirectories"].keys()):
             a_record = A_record["subdirectories"][name]
             if name in B_record["subdirectories"]:
                 b_record = B_record["subdirectories"][name]
