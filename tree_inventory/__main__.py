@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import logging
+from time import perf_counter
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
@@ -16,51 +17,87 @@ logger = logging.getLogger(__name__)
 PathOrStr = Union[Path, str]
 
 
-def calculate_tree(root: Path, detail_files: bool = False):
+def calculate_tree(root: Path, continue_previous: bool = False, detail_files: bool = False):
     """calculate_tree() implements the main record calculation facility
     of tree_inventory and is invoked via the --calculate command-line
     option.
     """
 
     logger.info(f"Calculating checksum for path '{root}'...")
+    csum_file = root / "tree_checksum.json"
     with tqdm(total=1) as progress:
         total_files = 0
         files_done = 0
 
-        def calculate_branch(dir: Path, collection: dict, level: int):
-            nonlocal progress, total_files, files_done
+        if continue_previous:
+            if csum_file.exists():
+                root_record = read_checksum_file(csum_file)
+            else:
+                continue_previous = False
+        if not continue_previous:
+            root_record = {}
+            root_record["calculated_at"] = datetime.now().isoformat()
+
+        def save_record():
+            nonlocal root_record
+
+            logger.info(f"Saving checksum to file: {csum_file}")
+            with open(csum_file, "wt") as outfile:
+                json.dump(root_record, outfile)
+
+        last_occasion = perf_counter()
+        between_occasions = 60.0
+
+        def on_occasion():
+            nonlocal progress, total_files, files_done, between_occasions
+            start_occasion = perf_counter()
+            progress.total = total_files
+            progress.n = files_done
+            progress.refresh()
+
+            save_record()
+            finish_occasion = perf_counter()
+            occasion_length = finish_occasion - start_occasion
+            if occasion_length < 2.0:
+                between_occasions = 60.0
+            else:
+                between_occasions = occasion_length * 25
+
+        def calculate_branch(record: dict, dir: Path, level: int):
+            nonlocal progress, total_files, files_done, last_occasion, between_occasions
             checksum = hashlib.md5()
             files, subdirectories = enumerate_dir(dir)
-            n_files = len(files)
-            total_files += len(files)
+            total_files += len(files) + len(subdirectories)
 
-            for name in subdirectories:
-                checksum.update(name.encode("utf-8"))
-                subcollection: dict = {}
-                subdir_checksum, subdir_n_files, fileMD5, file_listing = calculate_branch(
-                    dir / name, subcollection, level + 1
-                )
-                collection[name] = {
-                    "n_files": n_files,
-                    "subdirectories": subcollection,
-                    "MD5": subdir_checksum.hexdigest(),
-                    "MD5-files_only": fileMD5.hexdigest(),
-                }
-                if detail_files:
-                    collection[name]["file-listing"] = file_listing
-                n_files += subdir_n_files
-                checksum.update(subdir_checksum.hexdigest().encode("utf-8"))
-
-                progress.total = total_files
-                progress.n = files_done
-                progress.refresh()
+            if len(subdirectories) > 0:
+                if not continue_previous or "subdirectories" not in record:
+                    record["subdirectories"] = {}
+                for name in subdirectories:
+                    checksum.update(name.encode("utf-8"))
+                    sub_record = (
+                        {}
+                        if (not (continue_previous) or name not in record["subdirectories"])
+                        else record["subdirectories"][name]
+                    )
+                    record["subdirectories"][name] = sub_record
+                    if "MD5" not in sub_record:
+                        calculate_branch(sub_record, dir / name, level + 1)
+                    checksum.update(sub_record["MD5"].encode("utf-8"))
+                    files_done += 1
+                    if perf_counter() - last_occasion > between_occasions:
+                        last_occasion = perf_counter()
+                        on_occasion()
 
             fileMD5 = hashlib.md5()
-            file_listing = {}
+            n_files = 0
+            if detail_files:
+                file_listing = record["file-listing"] = {}
             for name in files:
                 if level == 0 and name == "tree_checksum.json":
                     # Skip the file that we created ourselves, but only at the top-level.
+                    files_done += 1
                     continue
+                n_files += 1
                 this_md5 = calculate_md5(dir, name)
                 fileMD5.update(this_md5.hexdigest().encode("utf-8"))
                 if detail_files:
@@ -70,30 +107,19 @@ def calculate_tree(root: Path, detail_files: bool = False):
                         "last-modified-at": os.path.getmtime(dir / name),
                     }
                 files_done += 1
+                if perf_counter() - last_occasion > between_occasions:
+                    last_occasion = perf_counter()
+                    on_occasion()
             checksum.update(fileMD5.hexdigest().encode("utf-8"))
+            record["n_files"] = n_files
+            record["MD5-files_only"] = fileMD5.hexdigest()
 
-            return checksum, n_files, fileMD5, file_listing
+            record["MD5"] = checksum.hexdigest()
+            return
 
-        root_subdirectories: dict = {}
-        checksum, n_files, fileMD5, file_listing = calculate_branch(root, root_subdirectories, 0)
-
-    root_data = {
-        "n_files": n_files,
-        "subdirectories": root_subdirectories,
-        "calculated_at": datetime.now().isoformat(),
-        "MD5-files_only": fileMD5.hexdigest(),
-        "MD5": checksum.hexdigest(),
-    }
-    if detail_files:
-        root_data["file-listing"] = file_listing
-
-    logger.info(f"A total of {n_files} files were enumerated.")
-    logger.info(f"Checksum computed: {checksum.hexdigest()}")
-    csum_file = root / "tree_checksum.json"
-    logger.info(f"Saving checksum to file: {csum_file}")
-    with open(csum_file, "wt") as outfile:
-        json.dump(root_data, outfile)
-    logger.info(f"Checksum saved.")
+        calculate_branch(root_record, root, 0)
+    save_record()
+    logger.info(f"Done.")
 
 
 def compare_trees(A: Path, B: Path):
@@ -149,14 +175,16 @@ def compare_trees(A: Path, B: Path):
 
         # Check if any subdirectories are absent first
 
-        for name in A_record["subdirectories"]:
-            a_record = A_record["subdirectories"][name]
-            if name not in B_record["subdirectories"]:
+        A_subdirectories = A_record["subdirectories"] if "subdirectories" in A_record else {}
+        B_subdirectories = B_record["subdirectories"] if "subdirectories" in B_record else {}
+        for name in A_subdirectories:
+            a_record = A_subdirectories[name]
+            if name not in B_subdirectories:
                 msg += ("\t" * (level + 1)) + f"Directory '{name}' absent from B.\n"
                 is_diff = True
-        for name in B_record["subdirectories"]:
-            b_record = B_record["subdirectories"][name]
-            if name not in A_record["subdirectories"]:
+        for name in B_subdirectories:
+            b_record = B_subdirectories[name]
+            if name not in A_subdirectories:
                 msg += ("\t" * (level + 1)) + f"Directory '{name}' absent from A.\n"
                 is_diff = True
 
@@ -165,11 +193,10 @@ def compare_trees(A: Path, B: Path):
         if level > 0 or is_diff:
             level += 1
 
-        for name in set(A_record["subdirectories"].keys()).intersection(B_record["subdirectories"].keys()):
-            a_record = A_record["subdirectories"][name]
-            if name in B_record["subdirectories"]:
-                b_record = B_record["subdirectories"][name]
-                msg += compare_branch(A_base_path / name, B_base_path / name, a_record, b_record, level)
+        for name in set(A_subdirectories.keys()).intersection(B_subdirectories.keys()):
+            a_record = A_subdirectories[name]
+            b_record = B_subdirectories[name]
+            msg += compare_branch(A_base_path / name, B_base_path / name, a_record, b_record, level)
 
         if len(msg) > 0:
             msg = ("\t" * (level - 1)) + f"{A_base_path} (A) vs {B_base_path} (B):\n" + msg
@@ -202,6 +229,9 @@ def main(args):
         "--calculate", type=str, default=None, help="Calculate the MD5 hash of the specified path and tree"
     )
     parser.add_argument(
+        "--continue", dest="continue_previous", action="store_true", help="Continue calculation from where it left off"
+    )
+    parser.add_argument(
         "--compare",
         type=str,
         nargs=2,
@@ -231,7 +261,7 @@ def main(args):
         logger.debug(f"Debug-level verbosity enabled.")
 
     if args.calculate is not None:
-        calculate_tree(Path(args.calculate), args.detail_files)
+        calculate_tree(Path(args.calculate), args.continue_previous, args.detail_files)
     elif args.copy is not None:
         source, destination = args.copy
         copy_tree_as_needed(Path(source), Path(destination))
