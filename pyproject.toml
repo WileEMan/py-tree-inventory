@@ -9,7 +9,7 @@ readme = "README.md"
 packages = [{include = "tree_inventory"}]
 
 [tool.poetry.dependencies]
-python = "*"
+python = ">=3.9"
 tqdm = "*"
 humanfriendly = ">=10"
 
