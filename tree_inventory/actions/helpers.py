@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Tuple, Union, Any
+from typing import Tuple, Union, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -118,3 +118,17 @@ def extract_record(root_record: dict, checksum_file: Path, target_path: Path):
     logger.debug(f"rel_path = {rel_path}")
     logger.debug(f"Searching for record for target: {rel_path}")
     return rel_path, descend_toward(rel_path.parts, root_record)
+
+
+def print_file(fname: PathOrStr, pretty_json: Optional[bool] = None):
+    """Diagnostic helper- print out the contents of a file."""
+    fname = Path(fname)
+    if pretty_json is None:
+        pretty_json = fname.suffix.lower() == ".json"
+    print(f"Contents of file: {fname} {'[json] ' if pretty_json else ''}----")
+    with open(str(fname), "rt") as fh:
+        if pretty_json:
+            print(json.dumps(json.load(fh), indent=4))
+        else:
+            print(fh.read())
+    print(f"--------")

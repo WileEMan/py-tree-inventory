@@ -1,27 +1,12 @@
 import sys
-import json
 import logging
 from io import StringIO
-from typing import Union, Optional
+from typing import Union
 from pathlib import Path
 
 from tree_inventory import main
 
 PathOrStr = Union[Path, str]
-
-
-def print_file(fname: PathOrStr, pretty_json: Optional[bool] = None):
-    """Diagnostic helper- print out the contents of a file."""
-    fname = Path(fname)
-    if pretty_json is None:
-        pretty_json = fname.suffix.lower() == ".json"
-    print(f"Contents of file: {fname} {'[json] ' if pretty_json else ''}----")
-    with open(str(fname), "rt") as fh:
-        if pretty_json:
-            print(json.dumps(json.load(fh), indent=4))
-        else:
-            print(fh.read())
-    print(f"--------")
 
 
 def write_text_to_file(fname: PathOrStr, new_text: str):
@@ -33,7 +18,7 @@ def write_text_to_file(fname: PathOrStr, new_text: str):
         fh.write(new_text)
 
 
-def main_with_log(args) -> str:
+def main_with_log(args, raise_on_error: bool = True) -> str:
     """Run main(), but capture everything that it outputs
     to the console into the returned string.
     """
@@ -48,11 +33,17 @@ def main_with_log(args) -> str:
     root_logger.addHandler(handler2)
     # for hh in root_logger.handlers:
     # print(f"Handler: {hh}")
+    all_loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+    for lg in all_loggers:
+        lg.setLevel(logging.DEBUG)
     try:
         main(args)
         handler1.flush()
         handler2.flush()
-        return string_stream.getvalue()
+        ret_str = string_stream.getvalue()
+        if raise_on_error and "Error" in ret_str:
+            raise RuntimeError("An error was observed when calling main.  Full log follows: -------\n" + ret_str)
+        return ret_str
     finally:
         root_logger.removeHandler(handler1)
         root_logger.removeHandler(handler2)

@@ -1,15 +1,21 @@
 import os
+import json
+import logging
 import hashlib
-from time import perf_counter
+from tqdm import tqdm
 from pathlib import Path
-from typing import Callable
+from datetime import datetime
+from time import perf_counter
+from typing import Callable, Optional
 
-from .helpers import calculate_md5, enumerate_dir
+from .helpers import calculate_md5, enumerate_dir, read_checksum_file
+
+logger = logging.getLogger(__name__)
 
 
 class Calculator:
-    def __init__(self, on_occasion: Callable, continue_previous: bool = False, detail_files: bool = False):
-        self.on_occasion = on_occasion
+    def __init__(self, continue_previous: bool = False, detail_files: bool = False):
+        self.on_occasion: Optional[Callable] = None
         self.continue_previous = continue_previous
         self.detail_files = detail_files
         self.total_files = 0
@@ -19,7 +25,8 @@ class Calculator:
 
     def _do_occasion(self):
         self.last_occasion = perf_counter()
-        self.on_occasion()
+        if self.on_occasion is not None:
+            self.on_occasion()
         elapsed = perf_counter() - self.last_occasion
         if elapsed < 2.0:
             self.between_occasions = 60.0
@@ -27,6 +34,9 @@ class Calculator:
             self.between_occasions = elapsed * 25
 
     def calculate_branch(self, record: dict, dir: Path, level: int):
+        if perf_counter() - self.last_occasion > self.between_occasions:
+            self._do_occasion()
+
         checksum = hashlib.md5()
         files, subdirectories = enumerate_dir(dir)
         self.total_files += len(files) + len(subdirectories)
@@ -76,3 +86,45 @@ class Calculator:
 
         record["MD5"] = checksum.hexdigest()
         return
+
+
+def calculate_tree(root: Path, continue_previous: bool = False, detail_files: bool = False):
+    """calculate_tree() implements the main record calculation facility
+    of tree_inventory and is invoked via the --calculate command-line
+    option.
+    """
+
+    logger.info(f"Calculating checksum for path '{root}'...")
+    csum_file = root / "tree_checksum.json"
+    with tqdm(total=1) as progress:
+        calc = Calculator(continue_previous, detail_files)
+
+        if continue_previous:
+            if csum_file.exists():
+                root_record = read_checksum_file(csum_file)
+            else:
+                continue_previous = False
+        if not continue_previous:
+            root_record = {}
+            root_record["calculated_at"] = datetime.now().isoformat()
+
+        def save_record():
+            nonlocal root_record
+
+            logger.info(f"Saving checksum to file: {csum_file}")
+            with open(csum_file, "wt") as outfile:
+                json.dump(root_record, outfile)
+
+        def on_occasion():
+            nonlocal progress, calc
+
+            progress.total = calc.total_files
+            progress.n = calc.files_done
+            progress.refresh()
+
+            save_record()
+
+        calc.on_occasion = on_occasion
+        calc.calculate_branch(root_record, root, 0)
+    save_record()
+    logger.info(f"Done.")

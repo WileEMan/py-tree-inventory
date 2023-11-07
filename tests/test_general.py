@@ -3,7 +3,8 @@ import shutil
 import logging
 from pathlib import Path
 
-from t_helpers import print_file, write_text_to_file, main_with_log, parse_results
+from tree_inventory.actions.helpers import print_file
+from t_helpers import write_text_to_file, main_with_log, parse_results
 
 logger = logging.getLogger(__name__)
 
