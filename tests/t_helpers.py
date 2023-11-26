@@ -42,7 +42,10 @@ def main_with_log(args, raise_on_error: bool = True) -> str:
         handler2.flush()
         ret_str = string_stream.getvalue()
         if raise_on_error and "Error" in ret_str:
-            raise RuntimeError(f"An error was observed when calling main.  Arguments were:\nmain([{args}])\nFull log follows: -------\n" + ret_str)
+            raise RuntimeError(
+                f"An error was observed when calling main.  Arguments were:\nmain([{args}])\nFull log follows: -------\n"
+                + ret_str
+            )
         return ret_str
     finally:
         root_logger.removeHandler(handler1)

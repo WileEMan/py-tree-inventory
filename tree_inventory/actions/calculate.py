@@ -8,7 +8,14 @@ from datetime import datetime
 from time import perf_counter, sleep
 from typing import Callable, Optional
 
-from .helpers import calculate_md5, enumerate_dir, read_checksum_file, find_checksum_file, extract_record, find_key_by_value
+from .helpers import (
+    calculate_md5,
+    enumerate_dir,
+    read_checksum_file,
+    find_checksum_file,
+    extract_record,
+    find_key_by_value,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +29,8 @@ class Calculator:
         self.files_done = 0
         self.last_occasion = perf_counter()
         self.between_occasions = 10.0
+        self.verbose = False
+        self.very_verbose = False
 
     def _do_occasion(self):
         self.last_occasion = perf_counter()
@@ -41,6 +50,8 @@ class Calculator:
         files, subdirectories = enumerate_dir(dir)
         self.total_files += len(files) + len(subdirectories)
 
+        if self.verbose:
+            logger.debug(f"Initial MD5 is: {checksum.hexdigest()}")
         if len(subdirectories) > 0:
             if not self.continue_previous or "subdirectories" not in record:
                 record["subdirectories"] = {}
@@ -59,6 +70,8 @@ class Calculator:
                 if perf_counter() - self.last_occasion > self.between_occasions:
                     self._do_occasion()
 
+        if self.verbose:
+            logger.debug(f"After subdirectories, MD5 is: {checksum.hexdigest()}")
         fileMD5 = hashlib.md5()
         n_files = 0
         if self.detail_files:
@@ -71,6 +84,8 @@ class Calculator:
             n_files += 1
             this_md5 = calculate_md5(dir, name)
             fileMD5.update(this_md5.hexdigest().encode("utf-8"))
+            if self.very_verbose:
+                logger.debug(f"After file '{name}', MD5-files_only is: {fileMD5.hexdigest()}")
             if self.detail_files:
                 file_listing[name] = {
                     "MD5": this_md5.hexdigest(),
@@ -81,6 +96,8 @@ class Calculator:
             if perf_counter() - self.last_occasion > self.between_occasions:
                 self._do_occasion()
         checksum.update(fileMD5.hexdigest().encode("utf-8"))
+        if self.verbose:
+            logger.debug(f"After files, MD5 is: {checksum.hexdigest()}")
         record["n_files"] = n_files
         record["MD5-files_only"] = fileMD5.hexdigest()
 
@@ -94,7 +111,9 @@ class Calculator:
             sub_record = record["subdirectories"][name]
             if "MD5" not in sub_record:
                 # Invalidated record, so can't calculate higher in the tree either.
-                raise RuntimeError(f"Cannot recalculate this record because one or more sub-records does not have a completed checksum.")
+                raise RuntimeError(
+                    f"Cannot recalculate this record because one or more sub-records does not have a completed checksum."
+                )
             checksum.update(sub_record["MD5"].encode("utf-8"))
         fileMD5_str = record["MD5-files_only"]
         checksum.update(fileMD5_str.encode("utf-8"))
@@ -120,12 +139,17 @@ def calculate_tree(target: Path, continue_previous: bool = False, start_new: boo
         csum_record_file = target / "tree_checksum.json"
 
         higher_csum_record_file = find_checksum_file(target)
-        if (higher_csum_record_file is not None and higher_csum_record_file.exists()
-            and not(os.path.samefile(higher_csum_record_file, csum_record_file))):
+        if (
+            higher_csum_record_file is not None
+            and higher_csum_record_file.exists()
+            and not (os.path.samefile(higher_csum_record_file, csum_record_file))
+        ):
             logger.warning(f"Starting a new record file at: {csum_record_file}")
             logger.warning(f"However a higher-level record file was found at: {higher_csum_record_file}")
             logger.warning(f"Note that further operations will utilize the highest-level record found automatically.")
-            logger.warning(f"Consider removing --new from your command or deleting the higher-level record if not intentional.")
+            logger.warning(
+                f"Consider removing --new from your command or deleting the higher-level record if not intentional."
+            )
             sleep(5)
             logger.warning(f"Proceeding as requested.")
 
@@ -140,12 +164,12 @@ def calculate_tree(target: Path, continue_previous: bool = False, start_new: boo
             root_record = target_record = {}
             target_record["calculated_at"] = datetime.now().isoformat()
         else:
-            logger.debug(f"Updating existing checksum file found at: {csum_record_file}")
+            logger.info(f"Updating existing checksum file found at: {csum_record_file}")
             root_record = read_checksum_file(csum_record_file)
             _, parent_records = extract_record(root_record, csum_record_file, target)
             target_record = parent_records[-1]
             parent_records = parent_records[:-1]
-            if not(continue_previous):
+            if not (continue_previous):
                 # target_record still needs to be referenced by its parent, but everything within
                 # it can be wiped out.  So can't create a new dictionary here, but can use clear().
                 target_record.clear()
@@ -155,12 +179,17 @@ def calculate_tree(target: Path, continue_previous: bool = False, start_new: boo
     for ii in range(len(parent_records)):
         del parent_records[ii]["MD5"]
 
-    parent_records_subdir_names = [find_key_by_value(parent_records[ii-1]['subdirectories'], parent_records[ii]) for ii in range(1,len(parent_records))]
-    parent_records_str = "root / " + ' / '.join(parent_records_subdir_names)
+    parent_records_subdir_names = [
+        find_key_by_value(parent_records[ii - 1]["subdirectories"], parent_records[ii])
+        for ii in range(1, len(parent_records))
+    ]
+    parent_records_str = "root / " + " / ".join(parent_records_subdir_names)
     logger.debug(f"parent records = {parent_records_str}")
 
     with tqdm(total=1) as progress:
         calc = Calculator(continue_previous, detail_files)
+        # calc.verbose = True
+        # calc.very_verbose = True
 
         def save_record(final: bool):
             nonlocal root_record
@@ -168,11 +197,11 @@ def calculate_tree(target: Path, continue_previous: bool = False, start_new: boo
             logger.info(f"Saving checksum to file: {csum_record_file}")
 
             if final:
-                for ii in range(len(parent_records)-1,-1,-1):
+                for ii in range(len(parent_records) - 1, -1, -1):
                     calc.recalculate(parent_records[ii])
 
             with open(csum_record_file, "wt") as outfile:
-                json.dump(root_record, outfile)
+                json.dump(root_record, outfile, indent=4)
 
         def on_occasion():
             nonlocal progress, calc
@@ -181,9 +210,9 @@ def calculate_tree(target: Path, continue_previous: bool = False, start_new: boo
             progress.n = calc.files_done
             progress.refresh()
 
-            save_record(final = False)
+            save_record(final=False)
 
         calc.on_occasion = on_occasion
         calc.calculate_branch(target_record, target, len(parent_records))
-    save_record(final = True)
+    save_record(final=True)
     logger.info(f"Done.")

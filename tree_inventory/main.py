@@ -1,4 +1,3 @@
-import sys
 import argparse
 import logging
 import traceback
@@ -20,8 +19,8 @@ def main(args):
         parser = argparse.ArgumentParser(
             description="Tool for collecting MD5 hashes of directory trees and selective copying",
             epilog="Note: if you apply --calculate on a directory within a tree that has already been calculated, then"
-                + " that directory will be recalculated from scratch and the result updated within the parent tree records,"
-                + " unless --new is also used."
+            + " that directory will be recalculated from scratch and the result updated within the parent tree records,"
+            + " unless --new is also used.",
         )
         parser.add_argument(
             "--calculate", type=str, default=None, help="Calculate the MD5 hash of the specified path and tree"
@@ -73,6 +72,7 @@ def main(args):
             for handler in logging.getLogger().handlers:
                 if isinstance(handler, logging.StreamHandler):
                     handler.setLevel(logging.DEBUG)
+            logging.getLogger().setLevel(logging.DEBUG)
             logger.setLevel(logging.DEBUG)
             logger.debug(f"Debug-level verbosity enabled.")
 

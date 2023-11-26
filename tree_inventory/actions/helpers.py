@@ -58,6 +58,9 @@ def enumerate_dir(dir: Path) -> Tuple[list, list]:
             subdirectories.append(name)
         else:
             files.append(name)
+    # The order we calculate an MD5 hash matters, I believe, so sort them to be consistent.
+    files.sort()
+    subdirectories.sort()
     return files, subdirectories
 
 

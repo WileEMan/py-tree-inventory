@@ -48,8 +48,8 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
         parse_results() function is updated to be able to parse the new output.
         """
 
-        #tab = "o"      # For debugging.
-        tab = '\t'
+        # tab = "o"      # For debugging.
+        tab = "\t"
 
         if "MD5" not in A_record:
             return (tab * (level)) + f"{A_base_path} (A) does not have a checksum.  Run --calculate first.\n"
@@ -59,11 +59,9 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
         if A_record["MD5"] == B_record["MD5"] and A_record["n_files"] == B_record["n_files"]:
             return ""
 
-        is_diff = False
         msg = ""
         if A_record["MD5-files_only"] != B_record["MD5-files_only"]:
             msg += (tab * (level + 1)) + f"Files within this folder mismatch.\n"
-            is_diff = True
 
         # Check if any subdirectories are absent first
 
@@ -73,17 +71,10 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
             a_record = A_subdirectories[name]
             if name not in B_subdirectories:
                 msg += (tab * (level + 1)) + f"Directory '{name}' absent from B.\n"
-                is_diff = True
         for name in B_subdirectories:
             b_record = B_subdirectories[name]
             if name not in A_subdirectories:
                 msg += (tab * (level + 1)) + f"Directory '{name}' absent from A.\n"
-                is_diff = True
-
-        # Once we find the levels where there are differences, we always want to
-        # start incrementing the auto_level.
-        #if level > 0 or is_diff:
-            #level += 1
 
         for name in set(A_subdirectories.keys()).intersection(B_subdirectories.keys()):
             a_record = A_subdirectories[name]
@@ -94,7 +85,6 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
                 if a_record["MD5"] != b_record["MD5"]:
                     msg += (tab * (level + 1)) + f"Directory '{name}' contains differences between A and B.\n"
 
-        #if len(msg) > 0:
         msg = (tab * (level)) + f"{A_base_path} (A) vs {B_base_path} (B):\n" + msg
 
         # msg += f"Considered: {A_base_path} (A {A_record['MD5']}) vs {B_base_path} (B {B_record['MD5']})\n"
