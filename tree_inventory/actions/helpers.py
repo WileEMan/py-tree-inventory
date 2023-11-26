@@ -12,6 +12,10 @@ PathOrStr = Union[Path, str]
 # HASH = hashlib._hashlib.HASH
 
 
+def find_key_by_value(dictionary: dict, value):
+    return list(dictionary.keys())[list(dictionary.values()).index(value)]
+
+
 def calculate_md5(dirname: PathOrStr, fname: PathOrStr) -> Any:
     """Calculate the MD5 of a single file."""
     hash_md5 = hashlib.md5()
@@ -79,29 +83,35 @@ def read_checksum_file(checksum_file: Path) -> dict:
         return json.load(fh)
 
 
-def extract_record(root_record: dict, checksum_file: Path, target_path: Path):
+def extract_record(root_record: dict, checksum_file: Path, target_path: Path) -> Tuple:
     """Once a record file is found and read, it may be necessary to locate
     a particular subrecord within the record tree.  For example, if the user
     wants to compare folders /root/A/AA and /root/B/AA but the record files
     are at the level of "A" and "B", then we need to first read the top-level
     record files and then locate the subrecord for AA within each.
+
+    extract_record() returns a tuple described as relative_path, record_list.
+    The record_list is a list which contains all the entries from the
+    root to the target record.  To extract the highest-level record in the
+    tree, use the first element in the list.  To extract the target record,
+    use the last element in the list.
     """
 
     def descend_toward(target: tuple, base_record: dict):
         try:
             # print(f"Descending toward: {target}")
-            first_dir = target[0]
-            if first_dir not in base_record["subdirectories"]:
+            next_target = target[0]
+            if next_target not in base_record["subdirectories"]:
                 raise RuntimeError(
                     f"While searching for the subdirectory entry for: {target_path}"
                     + f"\nIn checksum record file: {checksum_file}"
-                    + f"\nThe subdirectory: {first_dir}"
+                    + f"\nThe subdirectory: {next_target}"
                     + f"\nWas not found in the record.  The checksum record might be out-of-date."
                 )
-            next_record = base_record["subdirectories"][first_dir]
+            next_record = base_record["subdirectories"][next_target]
             if len(target) == 1:
-                return next_record
-            return descend_toward(target[1:], next_record)
+                return [next_record]
+            return [next_record] + descend_toward(target[1:], next_record)
         except Exception as ex:
             raise RuntimeError(
                 str(ex)
@@ -114,10 +124,10 @@ def extract_record(root_record: dict, checksum_file: Path, target_path: Path):
     logger.debug(f"checksum_file.parent = {checksum_file.parent}")
     rel_path = target_path.relative_to(checksum_file.parent)
     if str(rel_path) == ".":
-        return rel_path, root_record
+        return rel_path, [root_record]
     logger.debug(f"rel_path = {rel_path}")
     logger.debug(f"Searching for record for target: {rel_path}")
-    return rel_path, descend_toward(rel_path.parts, root_record)
+    return rel_path, [root_record] + descend_toward(rel_path.parts, root_record)
 
 
 def print_file(fname: PathOrStr, pretty_json: Optional[bool] = None):

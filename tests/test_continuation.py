@@ -32,8 +32,8 @@ def test_continuation():
         # computed, including all subfolders.  So to test the mode, we calculate a
         # first-pass and then modify it.
 
-        main_with_log(["--calculate", str(temp_path_A)] + addn_options)
-        main_with_log(["--calculate", str(temp_path_B)] + addn_options)
+        main_with_log(["--calculate", str(temp_path_A), "--new"] + addn_options)
+        main_with_log(["--calculate", str(temp_path_B), "--new"] + addn_options)
         test = main_with_log(
             ["--compare", str(temp_path_A / "Folder_C" / "Folder_C2"), str(temp_path_B / "Folder_C" / "Folder_C2")]
             + addn_options

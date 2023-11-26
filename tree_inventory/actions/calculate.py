@@ -5,10 +5,10 @@ import hashlib
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import Callable, Optional
 
-from .helpers import calculate_md5, enumerate_dir, read_checksum_file
+from .helpers import calculate_md5, enumerate_dir, read_checksum_file, find_checksum_file, extract_record, find_key_by_value
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class Calculator:
         self.total_files = 0
         self.files_done = 0
         self.last_occasion = perf_counter()
-        self.between_occasions = 60.0
+        self.between_occasions = 10.0
 
     def _do_occasion(self):
         self.last_occasion = perf_counter()
@@ -87,32 +87,91 @@ class Calculator:
         record["MD5"] = checksum.hexdigest()
         return
 
+    def recalculate(self, record: dict):
+        checksum = hashlib.md5()
+        for name in record["subdirectories"]:
+            checksum.update(name.encode("utf-8"))
+            sub_record = record["subdirectories"][name]
+            if "MD5" not in sub_record:
+                # Invalidated record, so can't calculate higher in the tree either.
+                raise RuntimeError(f"Cannot recalculate this record because one or more sub-records does not have a completed checksum.")
+            checksum.update(sub_record["MD5"].encode("utf-8"))
+        fileMD5_str = record["MD5-files_only"]
+        checksum.update(fileMD5_str.encode("utf-8"))
+        record["MD5"] = checksum.hexdigest()
+        return
 
-def calculate_tree(root: Path, continue_previous: bool = False, detail_files: bool = False):
+
+def calculate_tree(target: Path, continue_previous: bool = False, start_new: bool = False, detail_files: bool = False):
     """calculate_tree() implements the main record calculation facility
     of tree_inventory and is invoked via the --calculate command-line
     option.
     """
 
-    logger.info(f"Calculating checksum for path '{root}'...")
-    csum_file = root / "tree_checksum.json"
+    if start_new and continue_previous:
+        raise RuntimeError("Cannot specify both --new and --continue at the same time.")
+
+    logger.info(f"Calculating checksum for path '{target}'...")
+
+    root_record = None
+    target_record = None
+    parent_records = []
+    if start_new:
+        csum_record_file = target / "tree_checksum.json"
+
+        higher_csum_record_file = find_checksum_file(target)
+        if (higher_csum_record_file is not None and higher_csum_record_file.exists()
+            and not(os.path.samefile(higher_csum_record_file, csum_record_file))):
+            logger.warning(f"Starting a new record file at: {csum_record_file}")
+            logger.warning(f"However a higher-level record file was found at: {higher_csum_record_file}")
+            logger.warning(f"Note that further operations will utilize the highest-level record found automatically.")
+            logger.warning(f"Consider removing --new from your command or deleting the higher-level record if not intentional.")
+            sleep(5)
+            logger.warning(f"Proceeding as requested.")
+
+        if csum_record_file.exists():
+            csum_record_file.unlink()
+        root_record = target_record = {}
+        target_record["calculated_at"] = datetime.now().isoformat()
+    else:
+        csum_record_file = find_checksum_file(target)
+        if csum_record_file is None or not csum_record_file.exists():
+            csum_record_file = target / "tree_checksum.json"
+            root_record = target_record = {}
+            target_record["calculated_at"] = datetime.now().isoformat()
+        else:
+            logger.debug(f"Updating existing checksum file found at: {csum_record_file}")
+            root_record = read_checksum_file(csum_record_file)
+            _, parent_records = extract_record(root_record, csum_record_file, target)
+            target_record = parent_records[-1]
+            parent_records = parent_records[:-1]
+            if not(continue_previous):
+                # target_record still needs to be referenced by its parent, but everything within
+                # it can be wiped out.  So can't create a new dictionary here, but can use clear().
+                target_record.clear()
+                target_record["calculated_at"] = datetime.now().isoformat()
+
+    # Mark all parent records as invalidated until we complete.
+    for ii in range(len(parent_records)):
+        del parent_records[ii]["MD5"]
+
+    parent_records_subdir_names = [find_key_by_value(parent_records[ii-1]['subdirectories'], parent_records[ii]) for ii in range(1,len(parent_records))]
+    parent_records_str = "root / " + ' / '.join(parent_records_subdir_names)
+    logger.debug(f"parent records = {parent_records_str}")
+
     with tqdm(total=1) as progress:
         calc = Calculator(continue_previous, detail_files)
 
-        if continue_previous:
-            if csum_file.exists():
-                root_record = read_checksum_file(csum_file)
-            else:
-                continue_previous = False
-        if not continue_previous:
-            root_record = {}
-            root_record["calculated_at"] = datetime.now().isoformat()
-
-        def save_record():
+        def save_record(final: bool):
             nonlocal root_record
 
-            logger.info(f"Saving checksum to file: {csum_file}")
-            with open(csum_file, "wt") as outfile:
+            logger.info(f"Saving checksum to file: {csum_record_file}")
+
+            if final:
+                for ii in range(len(parent_records)-1,-1,-1):
+                    calc.recalculate(parent_records[ii])
+
+            with open(csum_record_file, "wt") as outfile:
                 json.dump(root_record, outfile)
 
         def on_occasion():
@@ -122,9 +181,9 @@ def calculate_tree(root: Path, continue_previous: bool = False, detail_files: bo
             progress.n = calc.files_done
             progress.refresh()
 
-            save_record()
+            save_record(final = False)
 
         calc.on_occasion = on_occasion
-        calc.calculate_branch(root_record, root, 0)
-    save_record()
+        calc.calculate_branch(target_record, target, len(parent_records))
+    save_record(final = True)
     logger.info(f"Done.")

@@ -24,12 +24,14 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
         )
     logger.debug(f"Checksum file SRC found at: {src_record_file}")
     src_record = read_checksum_file(src_record_file)
-    src_rel_path, src_subrecord = extract_record(src_record, src_record_file, source)
+    src_rel_path, src_records = extract_record(src_record, src_record_file, source)
+    src_subrecord = src_records[-1]
 
     dst_record_file = find_checksum_file(destination)
     if dst_record_file is not None and dst_record_file.exists():
         dst_record = read_checksum_file(dst_record_file)
-        dst_rel_path, dst_subrecord = extract_record(dst_record, dst_record_file, destination)
+        dst_rel_path, dst_records = extract_record(dst_record, dst_record_file, destination)
+        dst_subrecord = dst_records[-1]
         logger.debug(f"Checksum file DST found at: {dst_record_file}")
     else:
         raise RuntimeError(
