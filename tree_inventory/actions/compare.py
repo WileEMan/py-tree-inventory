@@ -1,3 +1,4 @@
+import os
 import logging
 from pathlib import Path
 from typing import Union
@@ -40,7 +41,13 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
             + f"\n\tRelative path B: {B_rel_path}"
         )
 
-    def compare_branch(A_base_path: tuple, B_base_path: tuple, A_record: dict, B_record: dict, level: int):
+    try:
+        terminal_size = os.get_terminal_size()
+        terminal_width = terminal_size.columns
+    except:
+        terminal_width = 100
+
+    def compare_branch(A_base_path: Path, B_base_path: Path, A_record: dict, B_record: dict, level: int):
         """compare_branch() is the recursive workhorse of compare_trees() that operates on a particular
         folder within the trees.
 
@@ -51,10 +58,16 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
         # tab = "o"      # For debugging.
         tab = "\t"
 
+        A_name = str(A_base_path) + " (A)"
+        B_name = str(B_base_path) + " (B)"
+        if level > 0 and len(A_name) + len(B_name) > (terminal_width - 55):
+            A_name = A_base_path.name + " (A)"
+            B_name = B_base_path.name + " (B)"
+
         if "MD5" not in A_record:
-            return (tab * (level)) + f"{A_base_path} (A) does not have a checksum.  Run --calculate first.\n"
+            return (tab * (level)) + f"{A_name} does not have a checksum.  Run --calculate first.\n"
         if "MD5" not in B_record:
-            return (tab * (level)) + f"{B_base_path} (B) does not have a checksum.  Run --calculate first.\n"
+            return (tab * (level)) + f"{B_name} does not have a checksum.  Run --calculate first.\n"
 
         if A_record["MD5"] == B_record["MD5"] and A_record["n_files"] == B_record["n_files"]:
             return ""
@@ -85,7 +98,7 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
                 if a_record["MD5"] != b_record["MD5"]:
                     msg += (tab * (level + 1)) + f"Directory '{name}' contains differences between A and B.\n"
 
-        msg = (tab * (level)) + f"{A_base_path} (A) vs {B_base_path} (B):\n" + msg
+        msg = (tab * (level)) + f"{A_name} vs {B_name}:\n" + msg
 
         # msg += f"Considered: {A_base_path} (A {A_record['MD5']}) vs {B_base_path} (B {B_record['MD5']})\n"
 

@@ -1,3 +1,4 @@
+import os
 import sys
 import logging
 from io import StringIO
@@ -52,6 +53,15 @@ def main_with_log(args, raise_on_error: bool = True) -> str:
         root_logger.removeHandler(handler2)
 
 
+def samepath(A: Path, B: Path):
+    """Similar to os.path.samefile(), but does not require that the files actually exist
+    or be the same on disk.  This checks only that the paths would refer to the same
+    file."""
+    A_str = os.path.normcase(os.path.normpath(A.resolve()))
+    B_str = os.path.normcase(os.path.normpath(B.resolve()))
+    return A_str == B_str
+
+
 def parse_results(text: str, base_A: Path, base_B: Path):
     """Parse results of a comparison operation.  Tailored to the
     text format of --compare.
@@ -61,25 +71,40 @@ def parse_results(text: str, base_A: Path, base_B: Path):
     missing_A = []
     missing_B = []
 
+    # Maintain 'current_A', a stack of the paths that have been listed.  Each entry in
+    # current_A is a tuple where the first entry is the indent for a path and the second
+    # is that absolute path itself.
+    current_A = [(0, base_A)]
+
     lines = text.split("\n")
-    current_A = None
-    # current_B = None
     for iLine in range(len(lines)):
         line = lines[iLine]
         if line.lstrip().startswith("A:"):
             iA = line.index("A:")
-            current_A = Path(line[iA + 2 :].lstrip()).relative_to(base_A)
-        # if line.lstrip().startswith("B:"):
-        # iB = line.index("B:")
-        # current_B = Path(line[iB + 2 :].lstrip()).relative_to(base_B)
+            current_A = [(0, Path(line[iA + 2 :].lstrip()))]
         if "vs" in line:
             iA = line.index("(A)")
-            # iVS = line.index("vs")
-            # iB = line.index("(B)")
-            current_A = Path(line[0:iA].strip()).relative_to(base_A)
-            # current_B = Path(line[iVS + 2 : iB].strip()).relative_to(base_B)
+            info = ""
+            try:
+                new_A = line[0:iA].strip()
+                new_indent = len(line[0:iA].rstrip()) - len(line[0:iA].strip())
+                info += f"line: {line}\n"
+                info += f"A substring: {line[0:iA]}\n"
+                info += f"new_indent = {new_indent}\n"
+                info += f"current_A before = {current_A}\n"
+                hypothetical_A = current_A[-1][1] / Path(new_A)
+                if new_indent != current_A[-1][0] or not samepath(current_A[-1][1], hypothetical_A):
+                    while new_indent <= current_A[-1][0]:
+                        info += f"last entry has indent {current_A[-1][0]} so moving up.\n"
+                        current_A = current_A[:-1]
+                    info += f"current_A now = {current_A}\n"
+                    current_A.append((new_indent, current_A[-1][1] / Path(new_A)))
+            except Exception as ex:
+                raise RuntimeError(
+                    f"With line:\n{line}\nA substring: {new_A}\nbase_A: {base_A}\n{info}" + str(ex)
+                ) from ex
         if "Files within this folder mismatch" in line:
-            file_mismatches.append(str(current_A))
+            file_mismatches.append(str(current_A[-1][1].relative_to(base_A)))
         if "absent from A" in line:
             i_apos1 = line.index("'")
             i_apos2 = line.rindex("'")
