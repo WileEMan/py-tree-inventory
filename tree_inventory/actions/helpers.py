@@ -33,24 +33,26 @@ def calculate_md5(dirname: PathOrStr, fname: PathOrStr) -> Any:
                     if size is None:
                         f.seek(0, 2)
                         size = f.tell()
-                        retries = 1 + (size // (1 << 30))     # Allow 1 retry plus 1 retry per GB
+                        retries = 1 + (size // (1 << 30))  # Allow 1 retry plus 1 retry per GB
                     f.seek(position, 0)
                     while True:
-                        chunk = f.read((1 << 20))       # Up to 1MB per chunk
+                        chunk = f.read((1 << 20))  # Up to 1MB per chunk
                         if chunk == b"":
                             if retry > 0:
                                 logger.info(f"Retry successful, completed checksum for: {pathname}")
                             return hash_md5
                         position += len(chunk)
                         hash_md5.update(chunk)
-                    #for chunk in iter(lambda: f.read(4096), b""):
-                        #hash_md5.update(chunk)
+                    # for chunk in iter(lambda: f.read(4096), b""):
+                    # hash_md5.update(chunk)
                 # print(f"MD5 of file '{fname}': {hash_md5.hexdigest()}")
             except OSError as ose:
                 if ose.errno == 22:
                     retry += 1
                     if retry <= retries:
-                        logger.warning(f"Retrying ({retry} of {retries}) at position {position} while calculating checksum for: {pathname}...")
+                        logger.warning(
+                            f"Retrying ({retry} of {retries}) at position {position} while calculating checksum for: {pathname}..."
+                        )
                         sleep(2)
                         continue
                 raise
