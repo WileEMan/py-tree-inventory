@@ -3,6 +3,7 @@ import os
 import hashlib
 import json
 import logging
+from time import sleep
 from pathlib import Path
 from typing import Tuple, Union, Any, Optional
 
@@ -18,13 +19,48 @@ def find_key_by_value(dictionary: dict, value):
 
 def calculate_md5(dirname: PathOrStr, fname: PathOrStr) -> Any:
     """Calculate the MD5 of a single file."""
-    hash_md5 = hashlib.md5()
-    hash_md5.update(str(fname).encode("utf-8"))
-    with open(Path(dirname) / fname, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    # print(f"MD5 of file '{fname}': {hash_md5.hexdigest()}")
-    return hash_md5
+    pathname = Path(dirname) / fname
+    try:
+        hash_md5 = hashlib.md5()
+        hash_md5.update(str(fname).encode("utf-8"))
+        position = 0
+        size = None
+        retry = 0
+        retries = 1
+        while True:
+            try:
+                with open(pathname, "rb") as f:
+                    if size is None:
+                        f.seek(0, 2)
+                        size = f.tell()
+                        retries = 1 + (size // (1 << 30))     # Allow 1 retry plus 1 retry per GB
+                    f.seek(position, 0)
+                    while True:
+                        chunk = f.read((1 << 20))       # Up to 1MB per chunk
+                        if chunk == b"":
+                            if retry > 0:
+                                logger.info(f"Retry successful, completed checksum for: {pathname}")
+                            return hash_md5
+                        position += len(chunk)
+                        hash_md5.update(chunk)
+                    #for chunk in iter(lambda: f.read(4096), b""):
+                        #hash_md5.update(chunk)
+                # print(f"MD5 of file '{fname}': {hash_md5.hexdigest()}")
+            except OSError as ose:
+                if ose.errno == 22:
+                    retry += 1
+                    if retry <= retries:
+                        logger.warning(f"Retrying ({retry} of {retries}) at position {position} while calculating checksum for: {pathname}...")
+                        sleep(2)
+                        continue
+                raise
+
+    except KeyboardInterrupt:
+        logger.info(f"User abort (keyboard interrupt) while calculating checksum for file: {pathname}")
+        raise
+
+    except Exception as ex:
+        raise RuntimeError(f"While calculating MD5 checksum for file: {pathname}: {str(ex)}") from ex
 
 
 def record_summary(record: dict):
