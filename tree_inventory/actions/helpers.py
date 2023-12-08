@@ -17,8 +17,12 @@ def find_key_by_value(dictionary: dict, value):
     return list(dictionary.keys())[list(dictionary.values()).index(value)]
 
 
-def calculate_md5(dirname: PathOrStr, fname: PathOrStr) -> Any:
-    """Calculate the MD5 of a single file."""
+AUTO = None
+
+
+def calculate_md5(dirname: PathOrStr, fname: PathOrStr, n_retries: Optional[int] = AUTO, _open_fcn=open) -> Any:
+    """Calculate the MD5 of a single file.  n_retries should normally be AUTO, but
+    can specify a fixed number of retries allowed for the file."""
     pathname = Path(dirname) / fname
     try:
         hash_md5 = hashlib.md5()
@@ -29,11 +33,13 @@ def calculate_md5(dirname: PathOrStr, fname: PathOrStr) -> Any:
         retries = 1
         while True:
             try:
-                with open(pathname, "rb") as f:
+                with _open_fcn(pathname, "rb") as f:
                     if size is None:
                         f.seek(0, 2)
                         size = f.tell()
-                        retries = 1 + (size // (1 << 30))  # Allow 1 retry plus 1 retry per GB
+                        if n_retries is None:
+                            n_retries = 1 + (size // (1 << 30))  # Allow 1 retry plus 1 retry per GB
+                        retries = n_retries
                     f.seek(position, 0)
                     while True:
                         chunk = f.read((1 << 20))  # Up to 1MB per chunk
