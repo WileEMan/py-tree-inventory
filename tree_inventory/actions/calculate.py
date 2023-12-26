@@ -83,6 +83,7 @@ class Calculator:
                 continue
             n_files += 1
             this_md5 = calculate_md5(dir, name)
+            fileMD5.update(name.encode("utf-8"))
             fileMD5.update(this_md5.hexdigest().encode("utf-8"))
             if self.very_verbose:
                 logger.debug(f"After file '{name}', MD5-files_only is: {fileMD5.hexdigest()}")

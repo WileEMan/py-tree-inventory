@@ -21,7 +21,9 @@ def test_continuation():
         shutil.rmtree(temp_path_B)
     try:
         shutil.copytree(resources_path, temp_path_A)
+        print(f"Copied tree: {resources_path}\nto: {temp_path_A}")
         shutil.copytree(resources_path, temp_path_B)
+        print(f"Copied tree: {resources_path}\nto: {temp_path_B}")
         sleep(1)
 
         ###
