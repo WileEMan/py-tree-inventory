@@ -65,7 +65,7 @@ def main(args):
             type=str,
             default=None,
             metavar="PATH",
-            help="Identify the largest duplicate files and folders within the path, save to duplicates.csv.",
+            help="Identify the largest duplicate folders within the path and save to duplicates.csv.",
         )
         parser.add_argument(
             "--dry-run", action="store_true", help="A listing of all changes will be produced but no changes made."

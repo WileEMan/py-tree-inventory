@@ -13,17 +13,15 @@ PathOrStr = Union[Path, str]
 
 def find_duplicates(A: Path, count: int = -1):
     """find_duplicates() searches for duplication within an
-    already-calculated tree inventory.  It creates a map of
-    all duplicate items, where an item can be either a file
-    or a complete folder.  The map includes the size of the
-    item and the two item paths.  This map is then sorted
-    by size.  The largest 'count' items are saved to duplicates.csv.
-
-    The count argument specifies the maximum number of duplicates
-    to list.  If count is -1, then all duplicates should be listed.
+    already-calculated tree inventory.  It descends the tree and
+    creates a map of all checksums.  Before adding each new checksum,
+    the map (hashtable) is checked for whether the checksum is already
+    a key in the hashtable.  If it is, and the size matches, then a
+    duplicate is identified and added to the duplicates list.  The
+    duplicates list is then sorted by size and saved to duplicates.csv.
     """
 
-    logger.info(f"Searching for duplicates within:\n\t{A}")
+    logger.info(f"Searching for duplicate folders within:\n\t{A}")
     A_record_file = find_checksum_file(A)
     logger.debug(f"Checksum file found at: {A_record_file}")
     root_path = Path(A_record_file).parent
@@ -67,7 +65,7 @@ def find_duplicates(A: Path, count: int = -1):
 
     logger.info(f"Looking for duplicates in: {root_path / A_rel_path}")
     collect_checksums(A_rel_path, A_subrecord)
-    logger.info(f"{len(duplicates)} duplicates were found.")
+    logger.info(f"{len(duplicates)} duplicate folders were found.")
 
     # Sort duplicates by size
     duplicates.sort()
