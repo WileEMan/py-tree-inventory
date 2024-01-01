@@ -1,6 +1,7 @@
 import logging
 import numpy as np
-from tree_inventory.actions.helpers import calculate_md5
+
+# from tree_inventory.actions.helpers import calculate_md5
 
 logger = logging.getLogger(__name__)
 

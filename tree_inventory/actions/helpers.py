@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import subprocess
+from . import symlinks
 from time import sleep
 from pathlib import Path
 from typing import Tuple, Union, Any, Optional
@@ -22,7 +23,7 @@ AUTO = None
 
 
 def calculate_md5_internal(pathname: Path, n_retries: Optional[int] = AUTO, _open_fcn=open) -> Any:
-    block_size = (1 << 20)        # Up to 1MB per chunk
+    block_size = 1 << 20  # Up to 1MB per chunk
     hash_md5 = hashlib.md5()
     # hash_md5.update(str(fname).encode("utf-8"))
     position = 0
@@ -67,6 +68,7 @@ def calculate_md5_internal(pathname: Path, n_retries: Optional[int] = AUTO, _ope
 
 example_hash = "cefd9e43b97405a7a09628501004a0cb"
 
+
 class hash_wrapper:
     def __init__(self, hexdigest: str):
         self._hexdigest = hexdigest
@@ -74,24 +76,22 @@ class hash_wrapper:
     def hexdigest(self):
         return self._hexdigest
 
+
 def calculate_md5_certutil(pathname: Path, n_retries: Optional[int] = AUTO) -> Any:
     # certutil -hashfile <file> MD5
-    if not(pathname.exists()):
+    if not (pathname.exists()):
         raise FileNotFoundError(f"Cannot calculate MD5 for file that is not found: {pathname}")
-    process = subprocess.run(
-        ["certutil", "-hashfile", str(pathname), "MD5"],
-        capture_output = True
-    )
+    process = subprocess.run(["certutil", "-hashfile", str(pathname), "MD5"], capture_output=True)
     stdout = process.stdout
     stderr = process.stderr
     returnvalue = process.returncode
     if returnvalue != 0:
-        if returnvalue == 0x800703ee:
+        if returnvalue == 0x800703EE:
             # This error comes up for a zero-length file.  Let's verify that's the case and
             # provide a default.
             if pathname.stat().st_size == 0:
                 return hashlib.md5()
-        raise RuntimeError(f"MD5 calculation failed on file: {pathname}\n{stdout}")
+        raise RuntimeError(f"MD5 calculation failed on file: {pathname}\n{stdout.decode()}\n{stderr.decode()}")
     try:
         data = stdout.decode("cp1252").replace("\r\n", "\n").replace("\n\r", "\n")
         lines = data.split("\n")
@@ -101,13 +101,18 @@ def calculate_md5_certutil(pathname: Path, n_retries: Optional[int] = AUTO) -> A
             raise RuntimeError(f"Expected certutil -hashfile MD5 command to output a first line containing 'MD5'.")
         hashcode = lines[1]
         if len(hashcode) != len(example_hash):
-            raise RuntimeError(f"Expected certutil -hashfile MD5 command to output a hash code of {len(example_hash)} digits, but received {len(hashcode)} digits instead: {hashcode}")
-        #print(f"certutil has exited with code: 0x{returnvalue:08x}")
-        #print(f"STDOUT:\n{stdout}")
-        #print(f"STDERR:\n{stderr}")
+            raise RuntimeError(
+                f"Expected certutil -hashfile MD5 command to output a hash code of {len(example_hash)} digits, but received {len(hashcode)} digits instead: {hashcode}"
+            )
+        # print(f"certutil has exited with code: 0x{returnvalue:08x}")
+        # print(f"STDOUT:\n{stdout}")
+        # print(f"STDERR:\n{stderr}")
         return hash_wrapper(hashcode)
     except Exception as ex:
-        raise RuntimeError(f"MD5 calculation failed on file: {pathname}\n{stdout}") from ex
+        if symlinks.islink(str(pathname)):
+            raise FileNotFoundError(f"Cannot calculate MD5 for symlink/reparse point: {pathname}")
+
+        raise RuntimeError(f"MD5 calculation failed on file: {pathname}\n{stdout.decode()}\n{stderr.decode()}") from ex
 
 
 def calculate_md5(dirname: PathOrStr, fname: PathOrStr, n_retries: Optional[int] = AUTO, _open_fcn=open) -> Any:

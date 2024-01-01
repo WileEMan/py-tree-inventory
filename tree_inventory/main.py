@@ -8,6 +8,7 @@ from typing import Union
 from .actions.calculate import calculate_tree
 from .actions.compare import compare_trees
 from .actions.update import update_copy
+from .actions.find_duplicates import find_duplicates
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,13 @@ def main(args):
             help="Update the tree from [source] to [destination] where MD5s do not match.",
         )
         parser.add_argument(
+            "--find-duplicates",
+            type=str,
+            default=None,
+            metavar="PATH",
+            help="Identify the largest duplicate files and folders within the path, save to duplicates.csv.",
+        )
+        parser.add_argument(
             "--dry-run", action="store_true", help="A listing of all changes will be produced but no changes made."
         )
         parser.add_argument(
@@ -84,6 +92,9 @@ def main(args):
         elif args.compare is not None:
             source, destination = args.compare
             compare_trees(Path(source), Path(destination), depth=args.depth)
+        elif args.find_duplicates is not None:
+            target = args.find_duplicates
+            find_duplicates(Path(target))
         else:
             raise RuntimeError("No command was recognized on the command-line.")
 

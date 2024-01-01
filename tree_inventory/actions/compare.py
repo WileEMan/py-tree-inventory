@@ -65,9 +65,13 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
             B_name = B_base_path.name + " (B)"
 
         if "MD5" not in A_record:
-            return (tab * (level)) + f"{A_name} does not have a checksum.  Run --calculate first.\n"
+            return (
+                tab * (level)
+            ) + f"{A_name} does not have a checksum.  Run --calculate first (perhaps with --continue).\n"
         if "MD5" not in B_record:
-            return (tab * (level)) + f"{B_name} does not have a checksum.  Run --calculate first.\n"
+            return (
+                tab * (level)
+            ) + f"{B_name} does not have a checksum.  Run --calculate first (perhaps with --continue).\n"
 
         if A_record["MD5"] == B_record["MD5"] and A_record["n_files"] == B_record["n_files"]:
             return ""

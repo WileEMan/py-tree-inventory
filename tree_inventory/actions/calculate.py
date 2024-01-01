@@ -52,6 +52,7 @@ class Calculator:
 
         if self.verbose:
             logger.debug(f"Initial MD5 is: {checksum.hexdigest()}")
+        total_size = 0
         if len(subdirectories) > 0:
             if not self.continue_previous or "subdirectories" not in record:
                 record["subdirectories"] = {}
@@ -66,6 +67,7 @@ class Calculator:
                 if "MD5" not in sub_record:
                     self.calculate_branch(sub_record, dir / name, level + 1)
                 checksum.update(sub_record["MD5"].encode("utf-8"))
+                total_size += sub_record["size"]
                 self.files_done += 1
                 if perf_counter() - self.last_occasion > self.between_occasions:
                     self._do_occasion()
@@ -74,6 +76,7 @@ class Calculator:
             logger.debug(f"After subdirectories, MD5 is: {checksum.hexdigest()}")
         fileMD5 = hashlib.md5()
         n_files = 0
+        files_size = 0
         if self.detail_files:
             file_listing = record["file-listing"] = {}
         for name in files:
@@ -87,10 +90,12 @@ class Calculator:
             fileMD5.update(this_md5.hexdigest().encode("utf-8"))
             if self.very_verbose:
                 logger.debug(f"After file '{name}', MD5-files_only is: {fileMD5.hexdigest()}")
+            file_size = os.path.getsize(dir / name)
+            files_size += file_size
             if self.detail_files:
                 file_listing[name] = {
                     "MD5": this_md5.hexdigest(),
-                    "size": os.path.getsize(dir / name),
+                    "size": file_size,
                     "last-modified-at": os.path.getmtime(dir / name),
                 }
             self.files_done += 1
@@ -99,7 +104,10 @@ class Calculator:
         checksum.update(fileMD5.hexdigest().encode("utf-8"))
         if self.verbose:
             logger.debug(f"After files, MD5 is: {checksum.hexdigest()}")
+        total_size += files_size
+        record["size"] = total_size
         record["n_files"] = n_files
+        record["files-size"] = files_size
         record["MD5-files_only"] = fileMD5.hexdigest()
 
         record["MD5"] = checksum.hexdigest()
@@ -116,6 +124,10 @@ class Calculator:
                     f"Cannot recalculate this record because one or more sub-records does not have a completed checksum."
                 )
             checksum.update(sub_record["MD5"].encode("utf-8"))
+        if "MD5-files_only" not in record and "MD5" not in record:
+            # We might be recalculating a subdirectory even though the higher-level calculation was never completed.
+            # In this case, just leave the higher-level entries incomplete and the user can use --continue to progress.
+            return
         fileMD5_str = record["MD5-files_only"]
         checksum.update(fileMD5_str.encode("utf-8"))
         record["MD5"] = checksum.hexdigest()
@@ -177,8 +189,11 @@ def calculate_tree(target: Path, continue_previous: bool = False, start_new: boo
                 target_record["calculated_at"] = datetime.now().isoformat()
 
     # Mark all parent records as invalidated until we complete.
+    # It's possible that the caller is re-doing a particular subdirectory even though the full
+    # tree hasn't been analyzed, so accept cases where the MD5 wasn't already present as well.
     for ii in range(len(parent_records)):
-        del parent_records[ii]["MD5"]
+        if "MD5" in parent_records[ii]:
+            del parent_records[ii]["MD5"]
 
     parent_records_subdir_names = [
         find_key_by_value(parent_records[ii - 1]["subdirectories"], parent_records[ii])

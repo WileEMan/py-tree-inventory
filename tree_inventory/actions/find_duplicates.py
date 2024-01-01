@@ -1,0 +1,84 @@
+# TODO: no unit tests on find_duplicates.
+
+import logging
+from pathlib import Path
+from typing import Union
+
+from .helpers import find_checksum_file, read_checksum_file, extract_record
+
+logger = logging.getLogger(__name__)
+
+PathOrStr = Union[Path, str]
+
+
+def find_duplicates(A: Path, count: int = -1):
+    """find_duplicates() searches for duplication within an
+    already-calculated tree inventory.  It creates a map of
+    all duplicate items, where an item can be either a file
+    or a complete folder.  The map includes the size of the
+    item and the two item paths.  This map is then sorted
+    by size.  The largest 'count' items are saved to duplicates.csv.
+
+    The count argument specifies the maximum number of duplicates
+    to list.  If count is -1, then all duplicates should be listed.
+    """
+
+    logger.info(f"Searching for duplicates within:\n\t{A}")
+    A_record_file = find_checksum_file(A)
+    logger.debug(f"Checksum file found at: {A_record_file}")
+    root_path = Path(A_record_file).parent
+    A_record = read_checksum_file(A_record_file)
+    A_rel_path, A_records = extract_record(A_record, A_record_file, A)
+    A_subrecord = A_records[-1]
+
+    # For example, if the argument 'A' was:
+    #   D:\Top\Second\Third
+    # but the record file was found in D:\Top\tree_checksum.json, then:
+    #   A_rel_path = r"Second\Third"
+    #   A_subrecord is the record specifically for 'Third'.
+
+    # Build a hash table from the MD5s.  Anytime that a duplicate MD5 is detected, add an entry to the duplicates list.
+    duplicates: list = []
+    hashtable: dict = {}
+
+    def collect_checksums(rel_path: str, record: dict):
+        nonlocal duplicates, hashtable
+
+        new_size = record["size"]
+        if new_size < 1:
+            return
+
+        checksum = record["MD5"]
+        new_entry = (record, rel_path)
+        if checksum in hashtable:
+            for old_entry in hashtable[checksum]:
+                old_record, old_rel_path = old_entry
+                if old_record["size"] == new_size:
+                    duplicates.append((new_size, old_entry, new_entry))
+                    break
+            hashtable[checksum].append(new_entry)
+        else:
+            hashtable[checksum] = [new_entry]
+
+        subdirectories = record["subdirectories"] if "subdirectories" in record else {}
+        for name in subdirectories:
+            rel_sub_path = rel_path + "\\" + name
+            collect_checksums(rel_sub_path, subdirectories[name])
+
+    logger.info(f"Looking for duplicates in: {root_path / A_rel_path}")
+    collect_checksums(A_rel_path, A_subrecord)
+    logger.info(f"{len(duplicates)} duplicates were found.")
+
+    # Sort duplicates by size
+    duplicates.sort()
+
+    # Save results in duplicates.csv.
+    with open("duplicates.csv", "wt") as fh:
+        fh.write("Size (in bytes), Folder Path, Duplicate Folder Path")
+        for dupe in duplicates:
+            size = dupe[0]
+            record1, rel_path1 = dupe[1]
+            record2, rel_path2 = dupe[2]
+            fh.write(f'{size}, "{rel_path1}", "{rel_path2}",')
+
+    logger.info(f"Duplicates list saved to duplicates.csv.")
