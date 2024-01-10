@@ -2,6 +2,9 @@ import os
 import json
 import logging
 import hashlib
+import multiprocessing
+import multiprocessing.pool
+import threading
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
@@ -21,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class Calculator:
-    def __init__(self, continue_previous: bool = False, detail_files: bool = False):
+    def __init__(self, continue_previous: bool = False, detail_files: bool = False, n_parallel: int = 1):
         self.on_occasion: Optional[Callable] = None
         self.continue_previous = continue_previous
         self.detail_files = detail_files
@@ -31,6 +34,14 @@ class Calculator:
         self.between_occasions = 10.0
         self.verbose = False
         self.very_verbose = False
+        self.thread_pool = multiprocessing.pool.ThreadPool(n_parallel) if n_parallel > 1 else None
+        self.n_parallel = n_parallel
+        self.n_pending = 0
+        self.lock = threading.Lock()
+
+    def __del__(self):
+        if self.thread_pool is not None:
+            self.thread_pool = None
 
     def _do_occasion(self):
         self.last_occasion = perf_counter()
@@ -53,6 +64,7 @@ class Calculator:
         if self.verbose:
             logger.debug(f"Initial MD5 is: {checksum.hexdigest()}")
         total_size = 0
+        pending = []
         if len(subdirectories) > 0:
             if not self.continue_previous or "subdirectories" not in record:
                 record["subdirectories"] = {}
@@ -65,12 +77,25 @@ class Calculator:
                 )
                 record["subdirectories"][name] = sub_record
                 if "MD5" not in sub_record:
-                    self.calculate_branch(sub_record, dir / name, level + 1)
+                    args = (sub_record, dir / name, level + 1)
+                    if self.thread_pool is None or self.n_pending >= self.n_parallel:
+                        self.calculate_branch(*args)
+                    else:
+                        self.n_pending += 1
+                        pending.append(self.thread_pool.apply_async(self.calculate_branch, args))
+            for async_pending in pending:
+                async_pending.get()
+                self.n_pending -= 1
+            for name in subdirectories:
                 checksum.update(sub_record["MD5"].encode("utf-8"))
                 total_size += sub_record["size"]
                 self.files_done += 1
-                if perf_counter() - self.last_occasion > self.between_occasions:
-                    self._do_occasion()
+                if self.lock.acquire(blocking=False):
+                    try:
+                        if perf_counter() - self.last_occasion > self.between_occasions:
+                            self._do_occasion()
+                    finally:
+                        self.lock.release()
 
         if self.verbose:
             logger.debug(f"After subdirectories, MD5 is: {checksum.hexdigest()}")
@@ -85,12 +110,12 @@ class Calculator:
                 self.files_done += 1
                 continue
             n_files += 1
+            file_size = os.path.getsize(dir / name)
             this_md5 = calculate_md5(dir, name)
             fileMD5.update(name.encode("utf-8"))
             fileMD5.update(this_md5.hexdigest().encode("utf-8"))
             if self.very_verbose:
                 logger.debug(f"After file '{name}', MD5-files_only is: {fileMD5.hexdigest()}")
-            file_size = os.path.getsize(dir / name)
             files_size += file_size
             if self.detail_files:
                 file_listing[name] = {
@@ -99,8 +124,12 @@ class Calculator:
                     "last-modified-at": os.path.getmtime(dir / name),
                 }
             self.files_done += 1
-            if perf_counter() - self.last_occasion > self.between_occasions:
-                self._do_occasion()
+            if self.lock.acquire(blocking=False):
+                try:
+                    if perf_counter() - self.last_occasion > self.between_occasions:
+                        self._do_occasion()
+                finally:
+                    self.lock.release()
         checksum.update(fileMD5.hexdigest().encode("utf-8"))
         if self.verbose:
             logger.debug(f"After files, MD5 is: {checksum.hexdigest()}")
@@ -134,7 +163,13 @@ class Calculator:
         return
 
 
-def calculate_tree(target: Path, continue_previous: bool = False, start_new: bool = False, detail_files: bool = False):
+def calculate_tree(
+    target: Path,
+    continue_previous: bool = False,
+    start_new: bool = False,
+    detail_files: bool = False,
+    n_parallel: int = 1,
+):
     """calculate_tree() implements the main record calculation facility
     of tree_inventory and is invoked via the --calculate command-line
     option.
@@ -202,8 +237,8 @@ def calculate_tree(target: Path, continue_previous: bool = False, start_new: boo
     parent_records_str = "root / " + " / ".join(parent_records_subdir_names)
     logger.debug(f"parent records = {parent_records_str}")
 
+    calc = Calculator(continue_previous, detail_files, n_parallel=n_parallel)
     with tqdm(total=1) as progress:
-        calc = Calculator(continue_previous, detail_files)
         # calc.verbose = True
         # calc.very_verbose = True
 
@@ -231,4 +266,5 @@ def calculate_tree(target: Path, continue_previous: bool = False, start_new: boo
         calc.on_occasion = on_occasion
         calc.calculate_branch(target_record, target, len(parent_records))
     save_record(final=True)
+    del calc
     logger.info(f"Done.")

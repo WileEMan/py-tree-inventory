@@ -73,6 +73,12 @@ def main(args):
         parser.add_argument(
             "--detail-files", action="store_true", help="Capture detailed file listings in the record file."
         )
+        parser.add_argument(
+            "--parallel",
+            type=int,
+            default=1,
+            help="Perform the operation with specified number of threads where supported.",
+        )
         parser.add_argument("--v", action="store_true", help="Increase verbosity.")
         args = parser.parse_args(args)
 
@@ -85,7 +91,13 @@ def main(args):
             logger.debug(f"Debug-level verbosity enabled.")
 
         if args.calculate is not None:
-            calculate_tree(Path(args.calculate), args.continue_previous, args.start_new, args.detail_files)
+            calculate_tree(
+                Path(args.calculate),
+                args.continue_previous,
+                args.start_new,
+                args.detail_files,
+                args.parallel,
+            )
         elif args.update is not None:
             source, destination = args.update
             update_copy(Path(source), Path(destination), dry_run=args.dry_run)

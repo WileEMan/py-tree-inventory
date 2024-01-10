@@ -1,6 +1,7 @@
 from time import sleep
 import shutil
 import logging
+import pytest
 from pathlib import Path
 
 from t_helpers import write_text_to_file, main_with_log, parse_results
@@ -8,8 +9,9 @@ from t_helpers import write_text_to_file, main_with_log, parse_results
 logger = logging.getLogger(__name__)
 
 
-def test_continuation():
-    addn_options = ["--v", "--detail-files"]
+@pytest.mark.parametrize("parallel", [1, 5])
+def test_continuation(parallel: int):
+    addn_options = ["--v", "--detail-files", "--parallel", str(parallel)]
 
     this_dir = Path(__file__).parent
     resources_path = this_dir / "resources"
