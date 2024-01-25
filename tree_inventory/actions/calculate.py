@@ -24,7 +24,14 @@ logger = logging.getLogger(__name__)
 
 
 class Calculator:
-    def __init__(self, continue_previous: bool = False, detail_files: bool = False, n_parallel: int = 1):
+    def __init__(
+        self,
+        continue_previous: bool = False,
+        detail_files: bool = False,
+        n_parallel: int = 1,
+        verbose: bool = False,
+        very_verbose: bool = False,
+    ):
         self.on_occasion: Optional[Callable] = None
         self.continue_previous = continue_previous
         self.detail_files = detail_files
@@ -32,12 +39,14 @@ class Calculator:
         self.files_done = 0
         self.last_occasion = perf_counter()
         self.between_occasions = 10.0
-        self.verbose = False
-        self.very_verbose = False
+        self.verbose = verbose
+        self.very_verbose = very_verbose
         self.thread_pool = multiprocessing.pool.ThreadPool(n_parallel) if n_parallel > 1 else None
         self.n_parallel = n_parallel
         self.n_pending = 0
         self.lock = threading.Lock()
+        if self.verbose:
+            logger.debug(f"Using {n_parallel} threads in parallel.")
 
     def __del__(self):
         if self.thread_pool is not None:
@@ -65,6 +74,7 @@ class Calculator:
             logger.debug(f"Initial MD5 is: {checksum.hexdigest()}")
         total_size = 0
         pending = []
+        were_parallel = 0
         if len(subdirectories) > 0:
             if not self.continue_previous or "subdirectories" not in record:
                 record["subdirectories"] = {}
@@ -82,11 +92,13 @@ class Calculator:
                         self.calculate_branch(*args)
                     else:
                         self.n_pending += 1
+                        were_parallel += 1
                         pending.append(self.thread_pool.apply_async(self.calculate_branch, args))
             for async_pending in pending:
                 async_pending.get()
                 self.n_pending -= 1
             for name in subdirectories:
+                sub_record = record["subdirectories"][name]
                 checksum.update(sub_record["MD5"].encode("utf-8"))
                 total_size += sub_record["size"]
                 self.files_done += 1
@@ -98,6 +110,8 @@ class Calculator:
                         self.lock.release()
 
         if self.verbose:
+            if were_parallel > 0:
+                logger.debug(f"{were_parallel} subdirectories were analyzed in parallel.")
             logger.debug(f"After subdirectories, MD5 is: {checksum.hexdigest()}")
         fileMD5 = hashlib.md5()
         n_files = 0
@@ -169,6 +183,7 @@ def calculate_tree(
     start_new: bool = False,
     detail_files: bool = False,
     n_parallel: int = 1,
+    verbose: bool = False,
 ):
     """calculate_tree() implements the main record calculation facility
     of tree_inventory and is invoked via the --calculate command-line
@@ -237,7 +252,7 @@ def calculate_tree(
     parent_records_str = "root / " + " / ".join(parent_records_subdir_names)
     logger.debug(f"parent records = {parent_records_str}")
 
-    calc = Calculator(continue_previous, detail_files, n_parallel=n_parallel)
+    calc = Calculator(continue_previous, detail_files, n_parallel=n_parallel, verbose=verbose)
     with tqdm(total=1) as progress:
         # calc.verbose = True
         # calc.very_verbose = True

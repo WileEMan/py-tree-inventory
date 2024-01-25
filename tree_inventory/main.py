@@ -79,7 +79,7 @@ def main(args):
             default=1,
             help="Perform the operation with specified number of threads where supported.",
         )
-        parser.add_argument("--v", action="store_true", help="Increase verbosity.")
+        parser.add_argument("-v", "--v", action="store_true", help="Increase verbosity.")
         args = parser.parse_args(args)
 
         if args.v:
@@ -92,11 +92,7 @@ def main(args):
 
         if args.calculate is not None:
             calculate_tree(
-                Path(args.calculate),
-                args.continue_previous,
-                args.start_new,
-                args.detail_files,
-                args.parallel,
+                Path(args.calculate), args.continue_previous, args.start_new, args.detail_files, args.parallel, args.v
             )
         elif args.update is not None:
             source, destination = args.update

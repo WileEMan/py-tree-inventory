@@ -24,7 +24,11 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
 
     logger.info(f"Comparing trees:\n\tA: {A}\n\tB: {B}")
     A_record_file = find_checksum_file(A)
+    if A_record_file is None:
+        raise RuntimeError(f"No checksum file was found for path '{A}'.  Use --calculate first.")
     B_record_file = find_checksum_file(B)
+    if B_record_file is None:
+        raise RuntimeError(f"No checksum file was found for path '{B}'.  Use --calculate first.")
     logger.debug(f"Checksum file A found at: {A_record_file}")
     logger.debug(f"Checksum file B found at: {B_record_file}")
     A_record = read_checksum_file(A_record_file)
@@ -102,6 +106,16 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
                 if a_record["MD5"] != b_record["MD5"]:
                     msg += (tab * (level + 1)) + f"Directory '{name}' contains differences between A and B.\n"
 
+        if not msg:
+            # I'm not sure if this is an error condition or if there is a legitimate case where this
+            # can come up.  For now, I'm displaying a bunch of diagnostic info as if it were an error.
+            msg = (tab * (level + 1)) + f"The MD5 mismatches but no specific difference was found."
+            msg += f"\nSubdirectories in A:\n{A_subdirectories}"
+            msg += f"\nSubdirectories in B:\n{B_subdirectories}"
+            msg += f"\nSubdirectories in both:\n{set(A_subdirectories.keys()).intersection(B_subdirectories.keys())}"
+            msg += f"\nA record:\n{A_record}"
+            msg += f"\nB record:\n{B_record}"
+            msg += "\n"
         msg = (tab * (level)) + f"{A_name} vs {B_name}:\n" + msg
 
         # msg += f"Considered: {A_base_path} (A {A_record['MD5']}) vs {B_base_path} (B {B_record['MD5']})\n"
