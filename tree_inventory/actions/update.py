@@ -17,6 +17,9 @@ PathOrStr = Union[Path, str]
 
 
 def update_copy(source: Path, destination: Path, dry_run: bool = False):
+    """Perform an update of the destination path from the source with the
+    tree inventory as a resource to minimize the effort."""
+
     logger.info(
         f"Updating tree:\n\tFrom source: {source}\n\tTo destination: {destination}"
     )
