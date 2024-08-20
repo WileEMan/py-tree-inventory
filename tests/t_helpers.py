@@ -93,20 +93,15 @@ def parse_results(text: str, base_A: Path, base_B: Path):
                 info += f"new_indent = {new_indent}\n"
                 info += f"current_A before = {current_A}\n"
                 hypothetical_A = current_A[-1][1] / Path(new_A)
-                if new_indent != current_A[-1][0] or not samepath(
-                    current_A[-1][1], hypothetical_A
-                ):
+                if new_indent != current_A[-1][0] or not samepath(current_A[-1][1], hypothetical_A):
                     while new_indent <= current_A[-1][0]:
-                        info += (
-                            f"last entry has indent {current_A[-1][0]} so moving up.\n"
-                        )
+                        info += f"last entry has indent {current_A[-1][0]} so moving up.\n"
                         current_A = current_A[:-1]
                     info += f"current_A now = {current_A}\n"
                     current_A.append((new_indent, current_A[-1][1] / Path(new_A)))
             except Exception as ex:
                 raise RuntimeError(
-                    f"With line:\n{line}\nA substring: {new_A}\nbase_A: {base_A}\n{info}"
-                    + str(ex)
+                    f"With line:\n{line}\nA substring: {new_A}\nbase_A: {base_A}\n{info}" + str(ex)
                 ) from ex
         if "Files within this folder mismatch" in line:
             file_mismatches.append(str(current_A[-1][1].relative_to(base_A)))

@@ -42,21 +42,15 @@ def test_update():
         )
         main_with_log(["--calculate", str(temp_path_B)] + addn_options)
 
-        test = main_with_log(
-            ["--compare", str(temp_path_A), str(temp_path_B)] + addn_options
-        )
-        file_mismatches, missing_A, missing_B = parse_results(
-            test, temp_path_A, temp_path_B
-        )
+        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B)] + addn_options)
+        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_A, temp_path_B)
         assert len(file_mismatches) == 0
         assert missing_A == ["Unwanted_Folder"]
         assert missing_B == ["New_Folder"]
 
         main_with_log(["--update", str(temp_path_A), str(temp_path_B)] + addn_options)
 
-        test = main_with_log(
-            ["--compare", str(temp_path_A), str(temp_path_B)] + addn_options
-        )
+        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B)] + addn_options)
         assert "No differences" in test
 
     finally:

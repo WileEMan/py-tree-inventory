@@ -54,9 +54,7 @@ def test_continuation(parallel: int):
         # let's also introduce a change that should go unnoticed in continuation mode because that
         # folder is already scanned.
         continue_text = "This file should be added by continuation."
-        write_text_to_file(
-            temp_path_A / "Continuation_Folder_A" / "File_A.txt", continue_text
-        )
+        write_text_to_file(temp_path_A / "Continuation_Folder_A" / "File_A.txt", continue_text)
         write_text_to_file(
             temp_path_A / "Folder_C" / "Ignored_file_A.txt",
             "This file should go unnoticed in continuation.",
@@ -64,25 +62,17 @@ def test_continuation(parallel: int):
         main_with_log(["--calculate", str(temp_path_A), "--continue"] + addn_options)
 
         # Calculate path B without continuation mode but also without the ignored file.
-        write_text_to_file(
-            temp_path_B / "Continuation_Folder_A" / "File_A.txt", continue_text
-        )
+        write_text_to_file(temp_path_B / "Continuation_Folder_A" / "File_A.txt", continue_text)
         main_with_log(["--calculate", str(temp_path_B)] + addn_options)
 
-        test = main_with_log(
-            ["--compare", str(temp_path_A), str(temp_path_B)] + addn_options
-        )
+        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B)] + addn_options)
         assert "No differences" in test
 
         # Finally, recompute A without continuation to make sure the 'unnoticed' file is now observed and breaks
         # the match between A and B.
         main_with_log(["--calculate", str(temp_path_A)] + addn_options)
-        test = main_with_log(
-            ["--compare", str(temp_path_A), str(temp_path_B)] + addn_options
-        )
-        file_mismatches, missing_A, missing_B = parse_results(
-            test, temp_path_A, temp_path_B
-        )
+        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B)] + addn_options)
+        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_A, temp_path_B)
         assert file_mismatches == ["Folder_C"]
         assert len(missing_A) == 0
         assert len(missing_B) == 0

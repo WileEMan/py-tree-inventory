@@ -25,14 +25,10 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
     logger.info(f"Comparing trees:\n\tA: {A}\n\tB: {B}")
     A_record_file = find_checksum_file(A)
     if A_record_file is None:
-        raise RuntimeError(
-            f"No checksum file was found for path '{A}'.  Use --calculate first."
-        )
+        raise RuntimeError(f"No checksum file was found for path '{A}'.  Use --calculate first.")
     B_record_file = find_checksum_file(B)
     if B_record_file is None:
-        raise RuntimeError(
-            f"No checksum file was found for path '{B}'.  Use --calculate first."
-        )
+        raise RuntimeError(f"No checksum file was found for path '{B}'.  Use --calculate first.")
     logger.debug(f"Checksum file A found at: {A_record_file}")
     logger.debug(f"Checksum file B found at: {B_record_file}")
     A_record = read_checksum_file(A_record_file)
@@ -55,9 +51,7 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
     except:
         terminal_width = 100
 
-    def compare_branch(
-        A_base_path: Path, B_base_path: Path, A_record: dict, B_record: dict, level: int
-    ):
+    def compare_branch(A_base_path: Path, B_base_path: Path, A_record: dict, B_record: dict, level: int):
         """compare_branch() is the recursive workhorse of compare_trees() that operates on a particular
         folder within the trees.
 
@@ -76,19 +70,14 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
 
         if "MD5" not in A_record:
             return (
-                (tab * (level))
-                + f"{A_name} does not have a checksum.  Run --calculate first (perhaps with --continue).\n"
-            )
+                tab * (level)
+            ) + f"{A_name} does not have a checksum.  Run --calculate first (perhaps with --continue).\n"
         if "MD5" not in B_record:
             return (
-                (tab * (level))
-                + f"{B_name} does not have a checksum.  Run --calculate first (perhaps with --continue).\n"
-            )
+                tab * (level)
+            ) + f"{B_name} does not have a checksum.  Run --calculate first (perhaps with --continue).\n"
 
-        if (
-            A_record["MD5"] == B_record["MD5"]
-            and A_record["n_files"] == B_record["n_files"]
-        ):
+        if A_record["MD5"] == B_record["MD5"] and A_record["n_files"] == B_record["n_files"]:
             return ""
 
         msg = ""
@@ -97,12 +86,8 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
 
         # Check if any subdirectories are absent first
 
-        A_subdirectories = (
-            A_record["subdirectories"] if "subdirectories" in A_record else {}
-        )
-        B_subdirectories = (
-            B_record["subdirectories"] if "subdirectories" in B_record else {}
-        )
+        A_subdirectories = A_record["subdirectories"] if "subdirectories" in A_record else {}
+        B_subdirectories = B_record["subdirectories"] if "subdirectories" in B_record else {}
         for name in A_subdirectories:
             a_record = A_subdirectories[name]
             if name not in B_subdirectories:
@@ -125,17 +110,12 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
                 )
             else:
                 if a_record["MD5"] != b_record["MD5"]:
-                    msg += (
-                        (tab * (level + 1))
-                        + f"Directory '{name}' contains differences between A and B.\n"
-                    )
+                    msg += (tab * (level + 1)) + f"Directory '{name}' contains differences between A and B.\n"
 
         if not msg:
             # I'm not sure if this is an error condition or if there is a legitimate case where this
             # can come up.  For now, I'm displaying a bunch of diagnostic info as if it were an error.
-            msg = (
-                tab * (level + 1)
-            ) + f"The MD5 mismatches but no specific difference was found."
+            msg = (tab * (level + 1)) + f"The MD5 mismatches but no specific difference was found."
             msg += f"\nSubdirectories in A:\n{A_subdirectories}"
             msg += f"\nSubdirectories in B:\n{B_subdirectories}"
             msg += f"\nSubdirectories in both:\n{set(A_subdirectories.keys()).intersection(B_subdirectories.keys())}"
@@ -153,8 +133,5 @@ def compare_trees(A: Path, B: Path, depth: int = 2):
     result = compare_branch(A_base_path, B_base_path, A_subrecord, B_subrecord, level=0)
     if not (result):
         result = "\tNo differences found.\n"
-    result = (
-        f"\n\nAs of {A_record['calculated_at']} (A) and {B_record['calculated_at']} (B):\n"
-        + result
-    )
+    result = f"\n\nAs of {A_record['calculated_at']} (A) and {B_record['calculated_at']} (B):\n" + result
     logger.info(result)

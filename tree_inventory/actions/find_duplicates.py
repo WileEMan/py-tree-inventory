@@ -61,9 +61,7 @@ def find_duplicates(A: Path, count: int = -1):
                 return True
         return False
 
-    def collect_checksums(
-        rel_path: str, record: dict, is_within_duplicates: bool = False
-    ):
+    def collect_checksums(rel_path: str, record: dict, is_within_duplicates: bool = False):
         nonlocal duplicates, hashtable
 
         new_size = record["size"]

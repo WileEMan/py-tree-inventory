@@ -20,14 +20,11 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
     """Perform an update of the destination path from the source with the
     tree inventory as a resource to minimize the effort."""
 
-    logger.info(
-        f"Updating tree:\n\tFrom source: {source}\n\tTo destination: {destination}"
-    )
+    logger.info(f"Updating tree:\n\tFrom source: {source}\n\tTo destination: {destination}")
     src_record_file = find_checksum_file(source)
     if src_record_file is None or not src_record_file.exists():
         raise RuntimeError(
-            f"Checksum record file not found for source: {source}"
-            + f"\nTry running --calculate before --update"
+            f"Checksum record file not found for source: {source}" + f"\nTry running --calculate before --update"
         )
     logger.debug(f"Checksum file SRC found at: {src_record_file}")
     src_record = read_checksum_file(src_record_file)
@@ -37,9 +34,7 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
     dst_record_file = find_checksum_file(destination)
     if dst_record_file is not None and dst_record_file.exists():
         dst_record = read_checksum_file(dst_record_file)
-        dst_rel_path, dst_records = extract_record(
-            dst_record, dst_record_file, destination
-        )
+        dst_rel_path, dst_records = extract_record(dst_record, dst_record_file, destination)
         dst_subrecord = dst_records[-1]
         logger.debug(f"Checksum file DST found at: {dst_record_file}")
     else:
@@ -81,10 +76,7 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
 
             ## Update files, if needed
 
-            if (
-                "MD5-files_only" not in DST_record
-                or DST_record["MD5-files_only"] != SRC_record["MD5-files_only"]
-            ):
+            if "MD5-files_only" not in DST_record or DST_record["MD5-files_only"] != SRC_record["MD5-files_only"]:
                 SRC_files, _ = enumerate_dir(SRC_path)
                 DST_files, _ = enumerate_dir(DST_path)
 
@@ -118,12 +110,8 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
 
             ## Update directories
 
-            SRC_subdirectories = (
-                SRC_record["subdirectories"] if "subdirectories" in SRC_record else {}
-            )
-            DST_subdirectories = (
-                DST_record["subdirectories"] if "subdirectories" in DST_record else {}
-            )
+            SRC_subdirectories = SRC_record["subdirectories"] if "subdirectories" in SRC_record else {}
+            DST_subdirectories = DST_record["subdirectories"] if "subdirectories" in DST_record else {}
             print(f"\nSRC_path = {SRC_path}")
             print(f"SRC_subdirectories = {SRC_subdirectories.keys()}")
             print(f"DST_subdirectories = {DST_subdirectories.keys()}")

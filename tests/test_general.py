@@ -50,12 +50,8 @@ def test_general():
             "I was created for this test.",
         )
         main_with_log(["--calculate", str(temp_path_B)] + addn_options)
-        test = main_with_log(
-            ["--compare", str(temp_path_A), str(temp_path_B)] + addn_options
-        )
-        file_mismatches, missing_A, missing_B = parse_results(
-            test, temp_path_A, temp_path_B
-        )
+        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B)] + addn_options)
+        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_A, temp_path_B)
         assert file_mismatches == ["Folder_C"]
         assert len(missing_A) == 0
         assert len(missing_B) == 0
@@ -77,13 +73,8 @@ def test_general():
 
         (temp_path_B / "Folder_C" / "Folder_C2" / "New_Directory").mkdir()
         main_with_log(["--calculate", str(temp_path_B)] + addn_options)
-        test = main_with_log(
-            ["--compare", str(temp_path_A), str(temp_path_B), "--depth", "100"]
-            + addn_options
-        )
-        file_mismatches, missing_A, missing_B = parse_results(
-            test, temp_path_A, temp_path_B
-        )
+        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B), "--depth", "100"] + addn_options)
+        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_A, temp_path_B)
         assert file_mismatches == ["Folder_C"]
         assert missing_A == ["New_Directory"]
         assert len(missing_B) == 0
@@ -103,16 +94,10 @@ def test_general():
             ]
             + addn_options
         )
-        file_mismatches, missing_A, missing_B = parse_results(
-            test, temp_path_B, temp_path_A
-        )
+        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_B, temp_path_A)
         assert len(file_mismatches) == 0
-        assert (
-            len(missing_A) == 0
-        )  # Missing from temp_path_B but they're swapped for this test only.
-        assert missing_B == [
-            "New_Directory"
-        ]  # Missing from temp_path_A but they're swapped for this test only.
+        assert len(missing_A) == 0  # Missing from temp_path_B but they're swapped for this test only.
+        assert missing_B == ["New_Directory"]  # Missing from temp_path_A but they're swapped for this test only.
 
         ###
         ### Create the file and folder in A as well, and then perform --calculate
@@ -129,16 +114,9 @@ def test_general():
             temp_path_A / "Folder_C" / "Created_File_1.txt",
         )
 
-        main_with_log(
-            ["--calculate", str(temp_path_A / "Folder_C" / "Folder_C2")] + addn_options
-        )
-        test = main_with_log(
-            ["--compare", str(temp_path_A), str(temp_path_B), "--depth", "100"]
-            + addn_options
-        )
-        file_mismatches, missing_A, missing_B = parse_results(
-            test, temp_path_A, temp_path_B
-        )
+        main_with_log(["--calculate", str(temp_path_A / "Folder_C" / "Folder_C2")] + addn_options)
+        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B), "--depth", "100"] + addn_options)
+        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_A, temp_path_B)
         assert file_mismatches == ["Folder_C"]
         assert len(missing_A) == 0
         assert len(missing_B) == 0

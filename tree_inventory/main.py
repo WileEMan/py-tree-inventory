@@ -85,9 +85,7 @@ def main(args):
             default=1,
             help="Perform the operation with specified number of threads where supported.",
         )
-        parser.add_argument(
-            "-v", "--v", action="store_true", help="Increase verbosity."
-        )
+        parser.add_argument("-v", "--v", action="store_true", help="Increase verbosity.")
         args = parser.parse_args(args)
 
         if args.v:
