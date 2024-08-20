@@ -9,6 +9,12 @@ on:
       - "main"
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: write
+  checks: write
+  issues: read
+  pull-requests: write
 
 jobs:
   static_analysis:
