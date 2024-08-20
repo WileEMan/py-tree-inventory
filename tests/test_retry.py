@@ -1,4 +1,5 @@
 import logging
+
 import numpy as np
 
 # from tree_inventory.actions.helpers import calculate_md5
@@ -35,7 +36,10 @@ class SpecialTestFile:
     def read(self, max_amount: int) -> bytes:
         if self.n_fails_so_far < len(self.fails_at):
             next_failure = self.fails_at[self.n_fails_so_far]
-            if self.position <= next_failure and self.position + max_amount > next_failure:
+            if (
+                self.position <= next_failure
+                and self.position + max_amount > next_failure
+            ):
                 logger.info(f"\tAt position {self.position}, generating OSError...")
                 self.n_fails_so_far += 1
                 raise OSError(22, "Invalid argument")
@@ -84,7 +88,11 @@ def test_retry():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format="%(asctime)s.%(msecs)03d: %(message)s", datefmt="%Y-%j %H:%M:%S", level=logging.INFO)
+    logging.basicConfig(
+        format="%(asctime)s.%(msecs)03d: %(message)s",
+        datefmt="%Y-%j %H:%M:%S",
+        level=logging.INFO,
+    )
     for handler in logging.getLogger().handlers:
         if isinstance(handler, logging.StreamHandler):
             handler.setLevel(logging.INFO)

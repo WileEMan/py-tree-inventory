@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Union
 
-from .helpers import find_checksum_file, read_checksum_file, extract_record
+from .helpers import extract_record, find_checksum_file, read_checksum_file
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,9 @@ def find_duplicates(A: Path, count: int = -1):
                 return True
         return False
 
-    def collect_checksums(rel_path: str, record: dict, is_within_duplicates: bool = False):
+    def collect_checksums(
+        rel_path: str, record: dict, is_within_duplicates: bool = False
+    ):
         nonlocal duplicates, hashtable
 
         new_size = record["size"]

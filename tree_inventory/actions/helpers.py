@@ -1,13 +1,15 @@
 from __future__ import annotations
-import os
+
 import hashlib
 import json
 import logging
+import os
 import subprocess
-from . import symlinks
-from time import sleep
 from pathlib import Path
-from typing import Tuple, Union, Any, Optional
+from time import sleep
+from typing import Any, Optional, Tuple, Union
+
+from . import symlinks
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,9 @@ def find_key_by_value(dictionary: dict, value):
 AUTO = None
 
 
-def calculate_md5_internal(pathname: Path, n_retries: Optional[int] = AUTO, _open_fcn=open) -> Any:
+def calculate_md5_internal(
+    pathname: Path, n_retries: Optional[int] = AUTO, _open_fcn=open
+) -> Any:
     block_size = 1 << 20  # Up to 1MB per chunk
     hash_md5 = hashlib.md5()
     # hash_md5.update(str(fname).encode("utf-8"))
@@ -37,14 +41,18 @@ def calculate_md5_internal(pathname: Path, n_retries: Optional[int] = AUTO, _ope
                     f.seek(0, 2)
                     size = f.tell()
                     if n_retries is None:
-                        n_retries = 1 + (size // (1 << 30))  # Allow 1 retry plus 1 retry per GB
+                        n_retries = 1 + (
+                            size // (1 << 30)
+                        )  # Allow 1 retry plus 1 retry per GB
                     retries = n_retries
                 f.seek(position, 0)
                 while True:
                     chunk = f.read(block_size)
                     if chunk == b"":
                         if retry > 0:
-                            logger.info(f"Retry successful, completed checksum for: {pathname}")
+                            logger.info(
+                                f"Retry successful, completed checksum for: {pathname}"
+                            )
                         return hash_md5
                     position += len(chunk)
                     hash_md5.update(chunk)
@@ -80,8 +88,12 @@ class hash_wrapper:
 def calculate_md5_certutil(pathname: Path, n_retries: Optional[int] = AUTO) -> Any:
     # certutil -hashfile <file> MD5
     if not (pathname.exists()):
-        raise FileNotFoundError(f"Cannot calculate MD5 for file that is not found: {pathname}")
-    process = subprocess.run(["certutil", "-hashfile", str(pathname), "MD5"], capture_output=True)
+        raise FileNotFoundError(
+            f"Cannot calculate MD5 for file that is not found: {pathname}"
+        )
+    process = subprocess.run(
+        ["certutil", "-hashfile", str(pathname), "MD5"], capture_output=True
+    )
     stdout = process.stdout
     stderr = process.stderr
     returnvalue = process.returncode
@@ -91,14 +103,20 @@ def calculate_md5_certutil(pathname: Path, n_retries: Optional[int] = AUTO) -> A
             # provide a default.
             if pathname.stat().st_size == 0:
                 return hashlib.md5()
-        raise RuntimeError(f"MD5 calculation failed on file: {pathname}\n{stdout.decode()}\n{stderr.decode()}")
+        raise RuntimeError(
+            f"MD5 calculation failed on file: {pathname}\n{stdout.decode()}\n{stderr.decode()}"
+        )
     try:
         data = stdout.decode("cp1252").replace("\r\n", "\n").replace("\n\r", "\n")
         lines = data.split("\n")
         if len(lines) != 4:
-            raise RuntimeError(f"Expected certutil -hashfile command to output exactly 4 lines.")
+            raise RuntimeError(
+                f"Expected certutil -hashfile command to output exactly 4 lines."
+            )
         if "MD5" not in lines[0]:
-            raise RuntimeError(f"Expected certutil -hashfile MD5 command to output a first line containing 'MD5'.")
+            raise RuntimeError(
+                f"Expected certutil -hashfile MD5 command to output a first line containing 'MD5'."
+            )
         hashcode = lines[1]
         if len(hashcode) != len(example_hash):
             raise RuntimeError(
@@ -110,12 +128,21 @@ def calculate_md5_certutil(pathname: Path, n_retries: Optional[int] = AUTO) -> A
         return hash_wrapper(hashcode)
     except Exception as ex:
         if symlinks.islink(str(pathname)):
-            raise FileNotFoundError(f"Cannot calculate MD5 for symlink/reparse point: {pathname}")
+            raise FileNotFoundError(
+                f"Cannot calculate MD5 for symlink/reparse point: {pathname}"
+            )
 
-        raise RuntimeError(f"MD5 calculation failed on file: {pathname}\n{stdout.decode()}\n{stderr.decode()}") from ex
+        raise RuntimeError(
+            f"MD5 calculation failed on file: {pathname}\n{stdout.decode()}\n{stderr.decode()}"
+        ) from ex
 
 
-def calculate_md5(dirname: PathOrStr, fname: PathOrStr, n_retries: Optional[int] = AUTO, _open_fcn=open) -> Any:
+def calculate_md5(
+    dirname: PathOrStr,
+    fname: PathOrStr,
+    n_retries: Optional[int] = AUTO,
+    _open_fcn=open,
+) -> Any:
     """Calculate the MD5 of a single file.  n_retries should normally be AUTO, but
     can specify a fixed number of retries allowed for the file."""
     pathname = Path(dirname) / fname
@@ -126,11 +153,15 @@ def calculate_md5(dirname: PathOrStr, fname: PathOrStr, n_retries: Optional[int]
             return calculate_md5_certutil(pathname, n_retries)
 
     except KeyboardInterrupt:
-        logger.info(f"User abort (keyboard interrupt) while calculating checksum for file: {pathname}")
+        logger.info(
+            f"User abort (keyboard interrupt) while calculating checksum for file: {pathname}"
+        )
         raise
 
     except Exception as ex:
-        raise RuntimeError(f"While calculating MD5 checksum for file: {pathname}: {str(ex)}") from ex
+        raise RuntimeError(
+            f"While calculating MD5 checksum for file: {pathname}: {str(ex)}"
+        ) from ex
 
 
 def record_summary(record: dict):

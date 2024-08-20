@@ -1,10 +1,10 @@
-from time import sleep
-import shutil
 import logging
+import shutil
 from pathlib import Path
+from time import sleep
 
 # from tree_inventory.actions.helpers import print_file
-from t_helpers import write_text_to_file, main_with_log, parse_results
+from t_helpers import main_with_log, parse_results, write_text_to_file
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +45,27 @@ def test_general():
         ### Add file in Folder_C
         ###
 
-        write_text_to_file(temp_path_B / "Folder_C" / "Created_File_1.txt", "I was created for this test.")
+        write_text_to_file(
+            temp_path_B / "Folder_C" / "Created_File_1.txt",
+            "I was created for this test.",
+        )
         main_with_log(["--calculate", str(temp_path_B)] + addn_options)
-        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B)] + addn_options)
-        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_A, temp_path_B)
+        test = main_with_log(
+            ["--compare", str(temp_path_A), str(temp_path_B)] + addn_options
+        )
+        file_mismatches, missing_A, missing_B = parse_results(
+            test, temp_path_A, temp_path_B
+        )
         assert file_mismatches == ["Folder_C"]
         assert len(missing_A) == 0
         assert len(missing_B) == 0
 
         test = main_with_log(
-            ["--compare", str(temp_path_A / "Folder_C" / "Folder_C2"), str(temp_path_B / "Folder_C" / "Folder_C2")]
+            [
+                "--compare",
+                str(temp_path_A / "Folder_C" / "Folder_C2"),
+                str(temp_path_B / "Folder_C" / "Folder_C2"),
+            ]
             + addn_options
         )
         assert "No differences" in test
@@ -66,8 +77,13 @@ def test_general():
 
         (temp_path_B / "Folder_C" / "Folder_C2" / "New_Directory").mkdir()
         main_with_log(["--calculate", str(temp_path_B)] + addn_options)
-        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B), "--depth", "100"] + addn_options)
-        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_A, temp_path_B)
+        test = main_with_log(
+            ["--compare", str(temp_path_A), str(temp_path_B), "--depth", "100"]
+            + addn_options
+        )
+        file_mismatches, missing_A, missing_B = parse_results(
+            test, temp_path_A, temp_path_B
+        )
         assert file_mismatches == ["Folder_C"]
         assert missing_A == ["New_Directory"]
         assert len(missing_B) == 0
@@ -87,10 +103,16 @@ def test_general():
             ]
             + addn_options
         )
-        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_B, temp_path_A)
+        file_mismatches, missing_A, missing_B = parse_results(
+            test, temp_path_B, temp_path_A
+        )
         assert len(file_mismatches) == 0
-        assert len(missing_A) == 0  # Missing from temp_path_B but they're swapped for this test only.
-        assert missing_B == ["New_Directory"]  # Missing from temp_path_A but they're swapped for this test only.
+        assert (
+            len(missing_A) == 0
+        )  # Missing from temp_path_B but they're swapped for this test only.
+        assert missing_B == [
+            "New_Directory"
+        ]  # Missing from temp_path_A but they're swapped for this test only.
 
         ###
         ### Create the file and folder in A as well, and then perform --calculate
@@ -103,12 +125,20 @@ def test_general():
 
         (temp_path_A / "Folder_C" / "Folder_C2" / "New_Directory").mkdir()
         shutil.copyfile(
-            temp_path_B / "Folder_C" / "Created_File_1.txt", temp_path_A / "Folder_C" / "Created_File_1.txt"
+            temp_path_B / "Folder_C" / "Created_File_1.txt",
+            temp_path_A / "Folder_C" / "Created_File_1.txt",
         )
 
-        main_with_log(["--calculate", str(temp_path_A / "Folder_C" / "Folder_C2")] + addn_options)
-        test = main_with_log(["--compare", str(temp_path_A), str(temp_path_B), "--depth", "100"] + addn_options)
-        file_mismatches, missing_A, missing_B = parse_results(test, temp_path_A, temp_path_B)
+        main_with_log(
+            ["--calculate", str(temp_path_A / "Folder_C" / "Folder_C2")] + addn_options
+        )
+        test = main_with_log(
+            ["--compare", str(temp_path_A), str(temp_path_B), "--depth", "100"]
+            + addn_options
+        )
+        file_mismatches, missing_A, missing_B = parse_results(
+            test, temp_path_A, temp_path_B
+        )
         assert file_mismatches == ["Folder_C"]
         assert len(missing_A) == 0
         assert len(missing_B) == 0

@@ -1,14 +1,15 @@
-import os
 import json
 import logging
+import os
 import shutil
-from tqdm import tqdm
 from pathlib import Path
-from typing import Union
 from time import perf_counter
+from typing import Union
+
+from tqdm import tqdm
 
 from .calculate import Calculator
-from .helpers import find_checksum_file, read_checksum_file, extract_record, enumerate_dir, print_file
+from .helpers import enumerate_dir, extract_record, find_checksum_file, print_file, read_checksum_file
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +17,14 @@ PathOrStr = Union[Path, str]
 
 
 def update_copy(source: Path, destination: Path, dry_run: bool = False):
-    logger.info(f"Updating tree:\n\tFrom source: {source}\n\tTo destination: {destination}")
+    logger.info(
+        f"Updating tree:\n\tFrom source: {source}\n\tTo destination: {destination}"
+    )
     src_record_file = find_checksum_file(source)
     if src_record_file is None or not src_record_file.exists():
         raise RuntimeError(
-            f"Checksum record file not found for source: {source}" + f"\nTry running --calculate before --update"
+            f"Checksum record file not found for source: {source}"
+            + f"\nTry running --calculate before --update"
         )
     logger.debug(f"Checksum file SRC found at: {src_record_file}")
     src_record = read_checksum_file(src_record_file)
@@ -30,7 +34,9 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
     dst_record_file = find_checksum_file(destination)
     if dst_record_file is not None and dst_record_file.exists():
         dst_record = read_checksum_file(dst_record_file)
-        dst_rel_path, dst_records = extract_record(dst_record, dst_record_file, destination)
+        dst_rel_path, dst_records = extract_record(
+            dst_record, dst_record_file, destination
+        )
         dst_subrecord = dst_records[-1]
         logger.debug(f"Checksum file DST found at: {dst_record_file}")
     else:
@@ -55,7 +61,13 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
     with tqdm(total=1) as progress:
         calc = Calculator(True, False)
 
-        def update_branch(SRC_path: Path, DST_path: Path, SRC_record: dict, DST_record: dict, level: int):
+        def update_branch(
+            SRC_path: Path,
+            DST_path: Path,
+            SRC_record: dict,
+            DST_record: dict,
+            level: int,
+        ):
             if (
                 "MD5" in DST_record
                 and "n_files" in DST_record
@@ -66,7 +78,10 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
 
             ## Update files, if needed
 
-            if "MD5-files_only" not in DST_record or DST_record["MD5-files_only"] != SRC_record["MD5-files_only"]:
+            if (
+                "MD5-files_only" not in DST_record
+                or DST_record["MD5-files_only"] != SRC_record["MD5-files_only"]
+            ):
                 SRC_files, _ = enumerate_dir(SRC_path)
                 DST_files, _ = enumerate_dir(DST_path)
 
@@ -100,8 +115,12 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
 
             ## Update directories
 
-            SRC_subdirectories = SRC_record["subdirectories"] if "subdirectories" in SRC_record else {}
-            DST_subdirectories = DST_record["subdirectories"] if "subdirectories" in DST_record else {}
+            SRC_subdirectories = (
+                SRC_record["subdirectories"] if "subdirectories" in SRC_record else {}
+            )
+            DST_subdirectories = (
+                DST_record["subdirectories"] if "subdirectories" in DST_record else {}
+            )
             print(f"\nSRC_path = {SRC_path}")
             print(f"SRC_subdirectories = {SRC_subdirectories.keys()}")
             print(f"DST_subdirectories = {DST_subdirectories.keys()}")
@@ -114,7 +133,13 @@ def update_copy(source: Path, destination: Path, dry_run: bool = False):
                     shutil.copytree(from_dir, to_dir)
                 else:
                     dst_subrecord = DST_subdirectories[name]
-                    update_branch(SRC_path / name, DST_path / name, src_subrecord, dst_subrecord, level + 1)
+                    update_branch(
+                        SRC_path / name,
+                        DST_path / name,
+                        src_subrecord,
+                        dst_subrecord,
+                        level + 1,
+                    )
             removed = []
             for name in DST_subdirectories:
                 if name not in SRC_subdirectories:

@@ -1,23 +1,24 @@
-import os
+import hashlib
 import json
 import logging
-import hashlib
 import multiprocessing
 import multiprocessing.pool
+import os
 import threading
-from tqdm import tqdm
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from time import perf_counter, sleep
 from typing import Callable, Optional
+
+from tqdm import tqdm
 
 from .helpers import (
     calculate_md5,
     enumerate_dir,
-    read_checksum_file,
-    find_checksum_file,
     extract_record,
+    find_checksum_file,
     find_key_by_value,
+    read_checksum_file,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,9 @@ class Calculator:
         self.between_occasions = 10.0
         self.verbose = verbose
         self.very_verbose = very_verbose
-        self.thread_pool = multiprocessing.pool.ThreadPool(n_parallel) if n_parallel > 1 else None
+        self.thread_pool = (
+            multiprocessing.pool.ThreadPool(n_parallel) if n_parallel > 1 else None
+        )
         self.n_parallel = n_parallel
         self.n_pending = 0
         self.lock = threading.Lock()
@@ -82,7 +85,10 @@ class Calculator:
                 checksum.update(name.encode("utf-8"))
                 sub_record = (
                     {}
-                    if (not (self.continue_previous) or name not in record["subdirectories"])
+                    if (
+                        not (self.continue_previous)
+                        or name not in record["subdirectories"]
+                    )
                     else record["subdirectories"][name]
                 )
                 record["subdirectories"][name] = sub_record
@@ -93,7 +99,9 @@ class Calculator:
                     else:
                         self.n_pending += 1
                         were_parallel += 1
-                        pending.append(self.thread_pool.apply_async(self.calculate_branch, args))
+                        pending.append(
+                            self.thread_pool.apply_async(self.calculate_branch, args)
+                        )
             for async_pending in pending:
                 async_pending.get()
                 self.n_pending -= 1
@@ -111,7 +119,9 @@ class Calculator:
 
         if self.verbose:
             if were_parallel > 0:
-                logger.debug(f"{were_parallel} subdirectories were analyzed in parallel.")
+                logger.debug(
+                    f"{were_parallel} subdirectories were analyzed in parallel."
+                )
             logger.debug(f"After subdirectories, MD5 is: {checksum.hexdigest()}")
         fileMD5 = hashlib.md5()
         n_files = 0
@@ -129,7 +139,9 @@ class Calculator:
             fileMD5.update(name.encode("utf-8"))
             fileMD5.update(this_md5.hexdigest().encode("utf-8"))
             if self.very_verbose:
-                logger.debug(f"After file '{name}', MD5-files_only is: {fileMD5.hexdigest()}")
+                logger.debug(
+                    f"After file '{name}', MD5-files_only is: {fileMD5.hexdigest()}"
+                )
             files_size += file_size
             if self.detail_files:
                 file_listing[name] = {
@@ -208,8 +220,12 @@ def calculate_tree(
             and not (os.path.samefile(higher_csum_record_file, csum_record_file))
         ):
             logger.warning(f"Starting a new record file at: {csum_record_file}")
-            logger.warning(f"However a higher-level record file was found at: {higher_csum_record_file}")
-            logger.warning(f"Note that further operations will utilize the highest-level record found automatically.")
+            logger.warning(
+                f"However a higher-level record file was found at: {higher_csum_record_file}"
+            )
+            logger.warning(
+                f"Note that further operations will utilize the highest-level record found automatically."
+            )
             logger.warning(
                 f"Consider removing --new from your command or deleting the higher-level record if not intentional."
             )
@@ -252,7 +268,9 @@ def calculate_tree(
     parent_records_str = "root / " + " / ".join(parent_records_subdir_names)
     logger.debug(f"parent records = {parent_records_str}")
 
-    calc = Calculator(continue_previous, detail_files, n_parallel=n_parallel, verbose=verbose)
+    calc = Calculator(
+        continue_previous, detail_files, n_parallel=n_parallel, verbose=verbose
+    )
     with tqdm(total=1) as progress:
         # calc.verbose = True
         # calc.very_verbose = True

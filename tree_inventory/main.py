@@ -4,11 +4,10 @@ import traceback
 from pathlib import Path
 from typing import Union
 
-
 from .actions.calculate import calculate_tree
 from .actions.compare import compare_trees
-from .actions.update import update_copy
 from .actions.find_duplicates import find_duplicates
+from .actions.update import update_copy
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,10 @@ def main(args):
             + " unless --new is also used.",
         )
         parser.add_argument(
-            "--calculate", type=str, default=None, help="Calculate the MD5 hash of the specified path and tree"
+            "--calculate",
+            type=str,
+            default=None,
+            help="Calculate the MD5 hash of the specified path and tree",
         )
         parser.add_argument(
             "--new",
@@ -68,10 +70,14 @@ def main(args):
             help="Identify the largest duplicate folders within the path and save to duplicates.csv.",
         )
         parser.add_argument(
-            "--dry-run", action="store_true", help="A listing of all changes will be produced but no changes made."
+            "--dry-run",
+            action="store_true",
+            help="A listing of all changes will be produced but no changes made.",
         )
         parser.add_argument(
-            "--detail-files", action="store_true", help="Capture detailed file listings in the record file."
+            "--detail-files",
+            action="store_true",
+            help="Capture detailed file listings in the record file.",
         )
         parser.add_argument(
             "--parallel",
@@ -79,7 +85,9 @@ def main(args):
             default=1,
             help="Perform the operation with specified number of threads where supported.",
         )
-        parser.add_argument("-v", "--v", action="store_true", help="Increase verbosity.")
+        parser.add_argument(
+            "-v", "--v", action="store_true", help="Increase verbosity."
+        )
         args = parser.parse_args(args)
 
         if args.v:
@@ -92,7 +100,12 @@ def main(args):
 
         if args.calculate is not None:
             calculate_tree(
-                Path(args.calculate), args.continue_previous, args.start_new, args.detail_files, args.parallel, args.v
+                Path(args.calculate),
+                args.continue_previous,
+                args.start_new,
+                args.detail_files,
+                args.parallel,
+                args.v,
             )
         elif args.update is not None:
             source, destination = args.update
